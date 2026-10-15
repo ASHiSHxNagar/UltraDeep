@@ -1,0 +1,61 @@
+<resources>
+    <string name="app_name">UltraDeep</string>
+    
+    <!-- Navigation & Tabs -->
+    <string name="tab_tracks">Tracks</string>
+    <string name="tab_playlists">Playlists</string>
+    <string name="tab_favorites">Favorites</string>
+    <string name="tab_settings">Settings</string>
+    
+    <!-- Player -->
+    <string name="unknown_title">Unknown Title</string>
+    <string name="unknown_artist">Unknown Artist</string>
+    <string name="unknown_album">Unknown Album</string>
+    <string name="time_zero">0:00</string>
+    <string name="now_playing">Now Playing</string>
+    <string name="queue_title">Up Next</string>
+    <string name="no_tracks_found">No music found on device</string>
+    <string name="permission_rationale">UltraDeep requires audio permission to scan and play your offline music library.</string>
+    <string name="grant_permission">Grant Permission</string>
+    
+    <!-- Lyrics -->
+    <string name="lyrics_title">Lyrics</string>
+    <string name="lyrics_loading">Fetching synchronized lyrics…</string>
+    <string name="lyrics_none">No lyrics found for this track</string>
+    <string name="lyrics_instrumental">Instrumental Track ♫</string>
+    <string name="edit_custom_lyrics">Edit / Paste Custom LRC Lyrics</string>
+    <string name="custom_lyrics_hint">Paste [mm:ss.xx] formatted LRC lyrics or plain text here…</string>
+    <string name="save_lyrics">Save Lyrics</string>
+    <string name="reset_lyrics">Reset to Automatic</string>
+    <string name="lyrics_saved">Custom lyrics saved offline</string>
+    <string name="fetch_online_lrc">Fetch from URL</string>
+    <string name="enter_lrc_url">Enter LRC file URL</string>
+    
+    <!-- Sorting -->
+    <string name="sort_by">Sort By</string>
+    <string name="sort_date_added">Date Added (Newest first)</string>
+    <string name="sort_title">Title (A-Z)</string>
+    <string name="sort_artist">Artist</string>
+    <string name="sort_duration">Duration</string>
+    <string name="sort_random">🎲 Randomize Order</string>
+    
+    <!-- Settings & Customization -->
+    <string name="settings_title">UltraDeep Settings</string>
+    <string name="rescan_storage">Rescan Storage</string>
+    <string name="rescan_desc">Scan device for newly downloaded or updated audio tracks</string>
+    <string name="rescanning">Scanning storage…</string>
+    <string name="rescan_complete">Library updated</string>
+    
+    <string name="ambient_bg_title">Now Playing Background</string>
+    <string name="ambient_mode_dynamic">Dynamic Album Art Ambient</string>
+    <string name="ambient_mode_custom">Custom Static Image / Loop</string>
+    <string name="choose_custom_bg">Choose Custom Background Image</string>
+    <string name="clear_custom_bg">Reset to Dynamic Ambient</string>
+    
+    <string name="create_playlist">Create Playlist</string>
+    <string name="playlist_name_hint">Playlist Name</string>
+    <string name="add_to_playlist">Add to Playlist</string>
+    <string name="playlist_created">Playlist created</string>
+    <string name="added_to_playlist">Added to playlist</string>
+    <string name="search_hint">Search songs, artists, albums…</string>
+</resources>

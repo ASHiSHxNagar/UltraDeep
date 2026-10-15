@@ -1,0 +1,96 @@
+package com.ultradeep.music.ui.playlist
+
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.ultradeep.music.UltraDeepApplication
+import com.ultradeep.music.data.db.entity.PlaylistEntity
+import com.ultradeep.music.data.model.Song
+import com.ultradeep.music.databinding.DialogPlaylistDetailBinding
+import com.ultradeep.music.service.MusicController
+import com.ultradeep.music.ui.adapter.SongAdapter
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+
+class PlaylistDetailBottomSheet(
+    private val playlist: PlaylistEntity
+) : BottomSheetDialogFragment() {
+
+    private var _binding: DialogPlaylistDetailBinding? = null
+    private val binding get() = _binding!!
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        _binding = DialogPlaylistDetailBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        binding.tvPlaylistDetailName.text = playlist.name
+
+        val playlistDao = UltraDeepApplication.instance.database.playlistDao()
+        val allSongs = MusicController.allSongs.value
+        val playlistSongs = mutableListOf<Song>()
+
+        val adapter = SongAdapter(
+            onSongClicked = { song, queue ->
+                MusicController.playSong(song, queue)
+                dismiss()
+            },
+            onSongMoreClicked = { song ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    playlistDao.removeSongFromPlaylist(playlist.id, song.id)
+                }
+            }
+        )
+
+        binding.rvPlaylistSongs.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvPlaylistSongs.adapter = adapter
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            playlistDao.getSongIdsForPlaylist(playlist.id).collectLatest { songIds ->
+                val idSet = songIds.toSet()
+                playlistSongs.clear()
+                playlistSongs.addAll(allSongs.filter { idSet.contains(it.id) })
+
+                binding.tvPlaylistDetailCount.text = "${playlistSongs.size} tracks"
+                adapter.submitList(playlistSongs)
+
+                if (playlistSongs.isEmpty()) {
+                    binding.tvPlaylistEmpty.visibility = View.VISIBLE
+                    binding.rvPlaylistSongs.visibility = View.GONE
+                    binding.btnPlayAllPlaylist.visibility = View.GONE
+                } else {
+                    binding.tvPlaylistEmpty.visibility = View.GONE
+                    binding.rvPlaylistSongs.visibility = View.VISIBLE
+                    binding.btnPlayAllPlaylist.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        binding.btnPlayAllPlaylist.setOnClickListener {
+            if (playlistSongs.isNotEmpty()) {
+                MusicController.playSong(playlistSongs.first(), playlistSongs)
+                dismiss()
+            }
+        }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+
+    companion object {
+        const val TAG = "PlaylistDetailBottomSheet"
+    }
+}

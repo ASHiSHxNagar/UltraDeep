@@ -1,0 +1,86 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer 'U' Monogram Wave Guide Contour -->
+    <path
+        android:pathData="M30,30 L30,62 C30,76 40,84 54,84 C68,84 78,76 78,62 L78,30"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="30"
+                android:startY="30"
+                android:endX="78"
+                android:endY="84"
+                android:type="linear">
+                <item android:color="#00F5D4" android:offset="0.0" />
+                <item android:color="#00C49F" android:offset="0.3" />
+                <item android:color="#7928CA" android:offset="0.7" />
+                <item android:color="#9D4EDD" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Soundwave Equalizer Bars forming the inner acoustic core -->
+    <!-- Bar 1: Left Wing - Cyan -->
+    <path
+        android:pathData="M36,36 L36,58"
+        android:strokeColor="#00F5D4"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round" />
+
+    <!-- Bar 2: Left High - Bright Cyan -->
+    <path
+        android:pathData="M42,28 L42,66"
+        android:strokeColor="#38EF7D"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round" />
+
+    <!-- Bar 3: Left Dip - Cyan Purple Transition -->
+    <path
+        android:pathData="M48,38 L48,72"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round" />
+
+    <!-- Bar 4: Center Base - Deep Violet / Magenta -->
+    <path
+        android:pathData="M54,46 L54,76"
+        android:strokeColor="#B5179E"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round" />
+
+    <!-- Bar 5: Right Dip - Purple -->
+    <path
+        android:pathData="M60,38 L60,72"
+        android:strokeColor="#7209B7"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round" />
+
+    <!-- Bar 6: Right High - Electric Violet -->
+    <path
+        android:pathData="M66,28 L66,66"
+        android:strokeColor="#7928CA"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round" />
+
+    <!-- Bar 7: Right Wing - Deep Violet -->
+    <path
+        android:pathData="M72,36 L72,58"
+        android:strokeColor="#9D4EDD"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round" />
+
+    <!-- Glowing Accent Sparks at tips -->
+    <path
+        android:pathData="M30,30 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#00F5D4" />
+    <path
+        android:pathData="M78,30 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#9D4EDD" />
+</vector>
