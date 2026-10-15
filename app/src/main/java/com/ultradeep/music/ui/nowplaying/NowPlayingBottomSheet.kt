@@ -14,9 +14,12 @@ import android.view.ViewGroup
 import android.view.ViewConfiguration
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import com.google.android.material.button.MaterialButton
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -198,6 +201,13 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                     val duration = MusicController.duration.value
                     val targetMs = (progress / 1000f * duration).toLong()
                     binding.tvCurrentTime.text = formatTime(targetMs)
+                    lyricsAdapter.updatePosition(
+                        targetMs,
+                        binding.rvLyrics,
+                        currentSongOffsetMs,
+                        forceScroll = true,
+                        immediate = true
+                    )
                 }
             }
 
@@ -211,6 +221,13 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                 val progress = seekBar?.progress ?: 0
                 val targetMs = (progress / 1000f * duration).toLong()
                 MusicController.seekTo(targetMs)
+                lyricsAdapter.updatePosition(
+                    targetMs,
+                    binding.rvLyrics,
+                    currentSongOffsetMs,
+                    forceScroll = true,
+                    immediate = true
+                )
             }
         })
     }
@@ -320,39 +337,72 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             MusicController.currentPosition.value,
             binding.rvLyrics,
             currentSongOffsetMs,
-            forceScroll = true
+            forceScroll = true,
+            immediate = true
         )
     }
 
     private fun updateOffsetUI() {
-        val seconds = currentSongOffsetMs / 1000f
-        binding.tvCurrentOffset.text = if (currentSongOffsetMs == 0L) {
-            "Sync: 0.0s"
+        val firstLineTs = lyricsAdapter.getFirstLineTimestamp()
+        if (firstLineTs > 0L) {
+            val effectiveStartSec = (firstLineTs + currentSongOffsetMs).coerceAtLeast(0L) / 1000f
+            binding.tvCurrentOffset.text = String.format(Locale.getDefault(), "Starts @ %.1fs", effectiveStartSec)
         } else {
-            String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
+            val seconds = currentSongOffsetMs / 1000f
+            binding.tvCurrentOffset.text = if (currentSongOffsetMs == 0L) "Sync: 0.0s" else String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
         }
     }
 
     private fun showCustomOffsetInputDialog() {
-        val input = EditText(requireContext()).apply {
-            hint = "e.g. 5.0 or 0.5 or -2.0"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
-            setText(String.format(Locale.getDefault(), "%.1f", currentSongOffsetMs / 1000f))
+        val firstLineTs = lyricsAdapter.getFirstLineTimestamp()
+        val currentStartSec = (firstLineTs + currentSongOffsetMs).coerceAtLeast(0L) / 1000f
+        val currentPosSec = MusicController.currentPosition.value / 1000f
+
+        val layout = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(60, 24, 60, 12)
         }
 
-        val container = FrameLayout(requireContext()).apply {
-            setPadding(60, 24, 60, 0)
-            addView(input)
+        val tvInfo = TextView(requireContext()).apply {
+            text = String.format(
+                Locale.getDefault(),
+                "Song me singer pehli line kab gaata hai?\nOriginal LRC line 1: %.1fs",
+                firstLineTs / 1000f
+            )
+            setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
+            textSize = 13f
+            setPadding(0, 0, 0, 16)
         }
+        layout.addView(tvInfo)
+
+        val input = EditText(requireContext()).apply {
+            hint = "e.g. 20.0 or 15.5"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(String.format(Locale.getDefault(), "%.1f", currentStartSec))
+        }
+        layout.addView(input)
+
+        val btnUseCurrent = MaterialButton(requireContext(), null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+            text = String.format(Locale.getDefault(), "Use Current Song Position (%.1fs)", currentPosSec)
+            setOnClickListener {
+                input.setText(String.format(Locale.getDefault(), "%.1f", currentPosSec))
+            }
+        }
+        layout.addView(btnUseCurrent)
 
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Set Lyrics Delay Timer")
-            .setMessage("Enter delay in seconds. For example, enter 5.0 so lyrics start 5 seconds later (use negative - to advance):")
-            .setView(container)
+            .setTitle("Set First Lyric Start Time")
+            .setView(layout)
             .setPositiveButton("Save") { _, _ ->
-                val sec = input.text.toString().toDoubleOrNull() ?: 0.0
-                setSyncOffset((sec * 1000).toLong())
-                Toast.makeText(requireContext(), "Lyrics sync timer saved permanently!", Toast.LENGTH_SHORT).show()
+                val targetSec = input.text.toString().toDoubleOrNull() ?: currentStartSec.toDouble()
+                val targetMs = (targetSec * 1000).toLong()
+                val calculatedOffset = targetMs - firstLineTs
+                setSyncOffset(calculatedOffset)
+                Toast.makeText(
+                    requireContext(),
+                    String.format(Locale.getDefault(), "Lyrics synced to start at %.1fs!", targetSec),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -562,7 +612,14 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             } else {
                 binding.tvLyricsStatus.visibility = View.GONE
                 lyricsAdapter.submitLines(result.lines)
-                lyricsAdapter.updatePosition(MusicController.currentPosition.value, binding.rvLyrics, currentSongOffsetMs)
+                updateOffsetUI()
+                lyricsAdapter.updatePosition(
+                    MusicController.currentPosition.value,
+                    binding.rvLyrics,
+                    currentSongOffsetMs,
+                    forceScroll = true,
+                    immediate = true
+                )
             }
         }
     }

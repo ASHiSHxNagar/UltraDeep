@@ -283,6 +283,7 @@ class MainActivity : AppCompatActivity() {
                         // An old artwork job must not recolour a newly-selected track.
                         if (MusicController.currentSong.value?.id == song.id) {
                             miniPlayerAmbient.setColors(colors.topColor, colors.centerColor)
+                            mini.wavyAmbientBorderView.setColors(colors.topColor, colors.centerColor)
                             songAdapter.setActiveSong(song.id, colors.topColor, colors.centerColor)
                         }
                     }
@@ -297,6 +298,8 @@ class MainActivity : AppCompatActivity() {
                 mini.btnMiniPlayPause.setImageResource(
                     if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
                 )
+                mini.equalizerBarsView.setPlaying(isPlaying)
+                mini.wavyAmbientBorderView.setPlaying(isPlaying)
             }
         }
 

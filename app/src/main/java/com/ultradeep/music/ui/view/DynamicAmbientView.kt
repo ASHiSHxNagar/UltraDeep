@@ -138,101 +138,102 @@ class DynamicAmbientView @JvmOverloads constructor(
         // 1. Draw base AMOLED true black background
         canvas.drawRect(0f, 0f, w, h, backgroundPaint)
 
-        val t = animTime * 0.001f
-        // Dynamic continuous color shifting across the color wheel (~22s full cycle)
-        val hueCycle = (animTime * 0.016f) % 360f
+        // Faster, fluid time progression for energetic cool visual motion
+        val t = animTime * 0.0018f
+        // Dynamic continuous color shifting across the color wheel
+        val hueCycle = (animTime * 0.030f) % 360f
 
         // Calculate 5 distinct, vibrant, harmoniously shifted colors
-        val cTopLeft = shiftHue(baseColor1, hueCycle)
-        val cTopRight = shiftHue(baseColor2, hueCycle + 72f)
-        val cCenter = shiftHue(baseColor3, hueCycle + 144f)
-        val cBottomLeft = shiftHue(baseColor1, hueCycle + 216f)
-        val cBottomRight = shiftHue(baseColor2, hueCycle + 288f)
+        val c1 = shiftHue(baseColor1, hueCycle)
+        val c2 = shiftHue(baseColor2, hueCycle + 72f)
+        val c3 = shiftHue(baseColor3, hueCycle + 144f)
+        val c4 = shiftHue(baseColor1, hueCycle + 216f)
+        val c5 = shiftHue(baseColor2, hueCycle + 288f)
 
-        // --- 1. Top-Left Corner Emitter ---
-        val cxTL = w * 0.12f + (w * 0.18f) * sin(t * 0.65f)
-        val cyTL = h * 0.12f + (h * 0.12f) * cos(t * 0.55f)
-        val rTL = (w * 1.15f).coerceAtLeast(420f)
+        // --- 1. Orb 1: Sweeps diagonally from Top-Left into Center-Right & back ---
+        val cx1 = w * (0.35f + 0.35f * sin(t * 1.15f))
+        val cy1 = h * (0.28f + 0.28f * cos(t * 0.95f))
+        val r1 = (w * (1.10f + 0.25f * sin(t * 1.40f))).coerceAtLeast(440f)
         orbPaintTopLeft.shader = RadialGradient(
-            cxTL, cyTL, rTL,
+            cx1, cy1, r1,
             intArrayOf(
-                colorWithAlpha(cTopLeft, 0.58f),
-                colorWithAlpha(cTopLeft, 0.28f),
-                colorWithAlpha(cTopLeft, 0.08f),
+                colorWithAlpha(c1, 0.65f),
+                colorWithAlpha(c1, 0.32f),
+                colorWithAlpha(c1, 0.09f),
                 Color.TRANSPARENT
             ),
             gradientStops,
             Shader.TileMode.CLAMP
         )
-        canvas.drawCircle(cxTL, cyTL, rTL, orbPaintTopLeft)
+        canvas.drawCircle(cx1, cy1, r1, orbPaintTopLeft)
 
-        // --- 2. Top-Right Corner Emitter ---
-        val cxTR = w * 0.88f + (w * 0.18f) * cos(t * 0.70f + 1.2f)
-        val cyTR = h * 0.14f + (h * 0.12f) * sin(t * 0.60f + 0.8f)
-        val rTR = (w * 1.15f).coerceAtLeast(420f)
+        // --- 2. Orb 2: Sweeps diagonally from Top-Right into Bottom-Left & back ---
+        val cx2 = w * (0.65f + 0.35f * cos(t * 1.10f + 1.2f))
+        val cy2 = h * (0.32f + 0.30f * sin(t * 1.05f + 0.8f))
+        val r2 = (w * (1.10f + 0.22f * cos(t * 1.30f))).coerceAtLeast(440f)
         orbPaintTopRight.shader = RadialGradient(
-            cxTR, cyTR, rTR,
+            cx2, cy2, r2,
             intArrayOf(
-                colorWithAlpha(cTopRight, 0.56f),
-                colorWithAlpha(cTopRight, 0.26f),
-                colorWithAlpha(cTopRight, 0.07f),
+                colorWithAlpha(c2, 0.62f),
+                colorWithAlpha(c2, 0.30f),
+                colorWithAlpha(c2, 0.08f),
                 Color.TRANSPARENT
             ),
             gradientStops,
             Shader.TileMode.CLAMP
         )
-        canvas.drawCircle(cxTR, cyTR, rTR, orbPaintTopRight)
+        canvas.drawCircle(cx2, cy2, r2, orbPaintTopRight)
 
-        // --- 3. Fluid Center Pulsing Emitter ---
-        val cxC = w * 0.50f + (w * 0.20f) * sin(t * 0.85f + 2.1f)
-        val cyC = h * 0.50f + (h * 0.16f) * cos(t * 0.75f + 1.6f)
-        val rC = (w * 1.20f).coerceAtLeast(450f)
+        // --- 3. Orb 3: Dynamic Figure-8 Plasma weaving across center and corners ---
+        val cx3 = w * (0.50f + 0.40f * sin(t * 1.35f + 2.1f))
+        val cy3 = h * (0.50f + 0.30f * sin(t * 2.70f + 1.6f))
+        val r3 = (w * (1.25f + 0.28f * sin(t * 1.60f))).coerceAtLeast(470f)
         orbPaintCenter.shader = RadialGradient(
-            cxC, cyC, rC,
+            cx3, cy3, r3,
             intArrayOf(
-                colorWithAlpha(cCenter, 0.52f),
-                colorWithAlpha(cCenter, 0.24f),
-                colorWithAlpha(cCenter, 0.06f),
+                colorWithAlpha(c3, 0.58f),
+                colorWithAlpha(c3, 0.28f),
+                colorWithAlpha(c3, 0.08f),
                 Color.TRANSPARENT
             ),
             gradientStops,
             Shader.TileMode.CLAMP
         )
-        canvas.drawCircle(cxC, cyC, rC, orbPaintCenter)
+        canvas.drawCircle(cx3, cy3, r3, orbPaintCenter)
 
-        // --- 4. Bottom-Left Corner Emitter ---
-        val cxBL = w * 0.14f + (w * 0.18f) * cos(t * 0.55f + 2.7f)
-        val cyBL = h * 0.86f + (h * 0.12f) * sin(t * 0.70f + 3.1f)
-        val rBL = (w * 1.15f).coerceAtLeast(420f)
+        // --- 4. Orb 4: Sweeps from Bottom-Left up towards Top-Right ---
+        val cx4 = w * (0.32f + 0.38f * cos(t * 0.95f + 2.8f))
+        val cy4 = h * (0.72f + 0.28f * sin(t * 1.10f + 3.2f))
+        val r4 = (w * (1.10f + 0.25f * cos(t * 1.50f))).coerceAtLeast(440f)
         orbPaintBottomLeft.shader = RadialGradient(
-            cxBL, cyBL, rBL,
+            cx4, cy4, r4,
             intArrayOf(
-                colorWithAlpha(cBottomLeft, 0.55f),
-                colorWithAlpha(cBottomLeft, 0.25f),
-                colorWithAlpha(cBottomLeft, 0.07f),
+                colorWithAlpha(c4, 0.62f),
+                colorWithAlpha(c4, 0.30f),
+                colorWithAlpha(c4, 0.08f),
                 Color.TRANSPARENT
             ),
             gradientStops,
             Shader.TileMode.CLAMP
         )
-        canvas.drawCircle(cxBL, cyBL, rBL, orbPaintBottomLeft)
+        canvas.drawCircle(cx4, cy4, r4, orbPaintBottomLeft)
 
-        // --- 5. Bottom-Right Corner Emitter ---
-        val cxBR = w * 0.86f + (w * 0.18f) * sin(t * 0.65f + 3.8f)
-        val cyBR = h * 0.86f + (h * 0.14f) * cos(t * 0.50f + 2.3f)
-        val rBR = (w * 1.15f).coerceAtLeast(420f)
+        // --- 5. Orb 5: Sweeps from Bottom-Right up towards Top-Left ---
+        val cx5 = w * (0.68f + 0.38f * sin(t * 1.05f + 4.0f))
+        val cy5 = h * (0.74f + 0.26f * cos(t * 0.90f + 2.4f))
+        val r5 = (w * (1.10f + 0.24f * sin(t * 1.35f))).coerceAtLeast(440f)
         orbPaintBottomRight.shader = RadialGradient(
-            cxBR, cyBR, rBR,
+            cx5, cy5, r5,
             intArrayOf(
-                colorWithAlpha(cBottomRight, 0.58f),
-                colorWithAlpha(cBottomRight, 0.28f),
-                colorWithAlpha(cBottomRight, 0.08f),
+                colorWithAlpha(c5, 0.65f),
+                colorWithAlpha(c5, 0.32f),
+                colorWithAlpha(c5, 0.09f),
                 Color.TRANSPARENT
             ),
             gradientStops,
             Shader.TileMode.CLAMP
         )
-        canvas.drawCircle(cxBR, cyBR, rBR, orbPaintBottomRight)
+        canvas.drawCircle(cx5, cy5, r5, orbPaintBottomRight)
 
         // 3. Soft translucent scrim overlay for crisp text readability
         canvas.drawRect(0f, 0f, w, h, scrimPaint)

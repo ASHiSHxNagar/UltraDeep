@@ -7,24 +7,46 @@
     android:layout_marginStart="8dp"
     android:layout_marginEnd="8dp"
     android:layout_marginBottom="8dp"
-    android:background="@drawable/bg_mini_player"
     android:clickable="true"
     android:elevation="8dp"
     android:focusable="true"
     android:foreground="?attr/selectableItemBackground">
 
-    <!-- Album Art Thumbnail -->
-    <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/ivMiniThumbnail"
+    <!-- Wavy Colorful Animated Ambient Border & Background -->
+    <com.ultradeep.music.ui.view.WavyAmbientBorderView
+        android:id="@+id/wavyAmbientBorderView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Album Art Thumbnail with Overlay Equalizer Animation -->
+    <FrameLayout
+        android:id="@+id/thumbnailContainer"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:layout_marginStart="8dp"
-        android:scaleType="centerCrop"
-        android:src="@drawable/bg_artwork_placeholder"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Small" />
+        app:layout_constraintTop_toTopOf="parent">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/ivMiniThumbnail"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:src="@drawable/bg_artwork_placeholder"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Small" />
+
+        <!-- Infinite Equalizer Bars: Bounces when song plays, rests when paused -->
+        <com.ultradeep.music.ui.view.EqualizerBarsView
+            android:id="@+id/equalizerBarsView"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_gravity="center" />
+    </FrameLayout>
 
     <!-- Text Information -->
     <LinearLayout
@@ -35,7 +57,7 @@
         android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/btnMiniPlayPause"
-        app:layout_constraintStart_toEndOf="@id/ivMiniThumbnail"
+        app:layout_constraintStart_toEndOf="@id/thumbnailContainer"
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView

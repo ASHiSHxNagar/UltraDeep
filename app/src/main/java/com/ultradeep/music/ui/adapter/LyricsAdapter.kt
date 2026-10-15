@@ -30,11 +30,14 @@ class LyricsAdapter(
         notifyDataSetChanged()
     }
 
+    fun getFirstLineTimestamp(): Long = lines.firstOrNull { it.timestampMs >= 0 }?.timestampMs ?: 0L
+
     fun updatePosition(
         currentPositionMs: Long,
         recyclerView: RecyclerView,
         offsetMs: Long = 0L,
-        forceScroll: Boolean = false
+        forceScroll: Boolean = false,
+        immediate: Boolean = false
     ) {
         if (lines.isEmpty()) return
         // Do not auto-scroll if lines have no timestamps (unsynced plain lyrics)
@@ -59,7 +62,17 @@ class LyricsAdapter(
             if (activeIndex in lines.indices) notifyItemChanged(activeIndex)
 
             if (activeIndex in lines.indices && (!isUserScrolling || forceScroll)) {
-                smoothScrollToActiveLine(recyclerView, activeIndex)
+                val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
+                if (immediate || kotlin.math.abs(newIndex - oldIndex) > 2) {
+                    // Instant accurate jump to exact vertical center during seeking
+                    if (layoutManager != null) {
+                        val rvHeight = recyclerView.height
+                        val centerOffset = (rvHeight / 2) - 80
+                        layoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
+                    }
+                } else {
+                    smoothScrollToActiveLine(recyclerView, activeIndex)
+                }
             }
         }
     }
