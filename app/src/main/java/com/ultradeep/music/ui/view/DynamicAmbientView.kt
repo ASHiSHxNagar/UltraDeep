@@ -73,11 +73,7 @@ class DynamicAmbientView @JvmOverloads constructor(
         targetColor1 = colors.topColor
         targetColor2 = colors.centerColor
         // Derive a third complementary vibrant glow
-        targetColor3 = if (colors.accentColor != Color.TRANSPARENT && colors.accentColor != 0) {
-            colors.accentColor
-        } else {
-            blendColors(colors.topColor, colors.centerColor)
-        }
+        targetColor3 = blendColors(colors.topColor, colors.centerColor)
 
         if (!animate) {
             color1 = targetColor1
