@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -227,6 +228,11 @@ object MusicController {
         val safePosition = positionMs.coerceIn(0L, _duration.value.coerceAtLeast(0L))
         player.seekTo(safePosition)
         _currentPosition.value = safePosition
+    }
+
+    /** Used by the now-playing press-and-hold gesture; it never changes the queue. */
+    fun setPlaybackSpeed(speed: Float) {
+        mediaController?.playbackParameters = PlaybackParameters(speed.coerceIn(0.25f, 2f))
     }
 
     fun skipNext() {

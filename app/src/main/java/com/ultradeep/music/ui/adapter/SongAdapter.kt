@@ -1,6 +1,8 @@
 package com.ultradeep.music.ui.adapter
 
 import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,6 +22,8 @@ class SongAdapter(
 
     private val songs = mutableListOf<Song>()
     private var activeSongId: Long = -1L
+    private var activePrimaryColor: Int = Color.parseColor("#00D9FF")
+    private var activeSecondaryColor: Int = Color.parseColor("#5A2D82")
 
     fun submitList(newSongs: List<Song>) {
         songs.clear()
@@ -27,11 +31,15 @@ class SongAdapter(
         notifyDataSetChanged()
     }
 
-    fun setActiveSong(songId: Long) {
-        if (activeSongId == songId) return
+    fun setActiveSong(songId: Long, primaryColor: Int? = null, secondaryColor: Int? = null) {
+        val paletteChanged = primaryColor != null && secondaryColor != null &&
+            (primaryColor != activePrimaryColor || secondaryColor != activeSecondaryColor)
+        if (activeSongId == songId && !paletteChanged) return
         val oldIndex = songs.indexOfFirst { it.id == activeSongId }
         val newIndex = songs.indexOfFirst { it.id == songId }
         activeSongId = songId
+        if (primaryColor != null) activePrimaryColor = primaryColor
+        if (secondaryColor != null) activeSecondaryColor = secondaryColor
         if (oldIndex != -1) notifyItemChanged(oldIndex)
         if (newIndex != -1) notifyItemChanged(newIndex)
     }
@@ -81,9 +89,14 @@ class SongAdapter(
             if (isCurrent) {
                 tvTitle.setTextColor(ContextCompat.getColor(context, R.color.neon_cyan))
                 vActiveIndicator.visibility = View.VISIBLE
+                itemView.background = GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(withAlpha(activePrimaryColor, 54), Color.TRANSPARENT, withAlpha(activeSecondaryColor, 34))
+                ).apply { cornerRadius = 18f * context.resources.displayMetrics.density }
             } else {
                 tvTitle.setTextColor(ContextCompat.getColor(context, R.color.text_primary))
                 vActiveIndicator.visibility = View.GONE
+                itemView.setBackgroundColor(Color.TRANSPARENT)
             }
 
             val art = com.ultradeep.music.util.ArtworkManager.getArtworkForSong(context, song)
@@ -93,5 +106,8 @@ class SongAdapter(
                 error(R.drawable.bg_artwork_placeholder)
             }
         }
+
+        private fun withAlpha(color: Int, alpha: Int) =
+            Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
     }
 }

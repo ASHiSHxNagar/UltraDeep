@@ -11,6 +11,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewConfiguration
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.SeekBar
@@ -51,6 +52,18 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     private var rawLyricsCache: String = ""
     private var currentSongOffsetMs: Long = 0L
     private var currentSongId: Long = -1L
+    private var lyricsRequestSongId: Long = -1L
+    private var speedHoldArmed = false
+    private var isSpeedHoldActive = false
+    private var speedHoldHost: View? = null
+    private val speedHoldRunnable = Runnable {
+        if (speedHoldArmed && MusicController.isPlaying.value) {
+            isSpeedHoldActive = true
+            MusicController.setPlaybackSpeed(2f)
+            binding.tvHeaderTitle.text = "2× SPEED"
+            binding.contentContainer.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        }
+    }
 
     private lateinit var prefs: SharedPreferences
 
@@ -234,13 +247,22 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             }
         })
 
-        binding.artworkViewLayout.setOnTouchListener { _, event ->
+        binding.artworkViewLayout.setOnTouchListener { view, event ->
+            handleSpeedHold(view, event)
             artworkGestureDetector.onTouchEvent(event)
             true
         }
 
-        binding.lyricsViewLayout.setOnTouchListener { _, event ->
+        binding.lyricsViewLayout.setOnTouchListener { view, event ->
+            handleSpeedHold(view, event)
             lyricsGestureDetector.onTouchEvent(event)
+        }
+
+        // RecyclerView consumes its own touch stream, so it needs the same handler for
+        // the top-right lyrics area while keeping vertical lyric scrolling intact.
+        binding.rvLyrics.setOnTouchListener { view, event ->
+            handleSpeedHold(view, event)
+            false
         }
 
         // Also intercept horizontal swipe right on the lyrics recyclerview without breaking vertical scroll
@@ -249,6 +271,39 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                 return lyricsGestureDetector.onTouchEvent(e)
             }
         })
+    }
+
+    /**
+     * Holding the top-right 40% x 40% of artwork/lyrics temporarily plays at 2×.
+     * A normal touch, scroll or swipe never changes speed; releasing always restores 1×.
+     */
+    private fun handleSpeedHold(view: View, event: MotionEvent) {
+        val inSpeedZone = event.x >= view.width * 0.60f && event.y <= view.height * 0.40f
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (inSpeedZone && MusicController.isPlaying.value) {
+                    speedHoldArmed = true
+                    speedHoldHost = view
+                    view.postDelayed(speedHoldRunnable, ViewConfiguration.getLongPressTimeout().toLong())
+                }
+            }
+            MotionEvent.ACTION_MOVE -> if (!inSpeedZone) stopSpeedHold(view)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopSpeedHold(view)
+        }
+    }
+
+    private fun stopSpeedHold(view: View? = null) {
+        view?.removeCallbacks(speedHoldRunnable)
+        speedHoldHost?.removeCallbacks(speedHoldRunnable)
+        speedHoldHost = null
+        binding.contentContainer.removeCallbacks(speedHoldRunnable)
+        binding.rvLyrics.removeCallbacks(speedHoldRunnable)
+        speedHoldArmed = false
+        if (isSpeedHoldActive) {
+            isSpeedHoldActive = false
+            MusicController.setPlaybackSpeed(1f)
+            binding.tvHeaderTitle.setText(R.string.now_playing)
+        }
     }
 
     private fun adjustSyncOffset(deltaMs: Long) {
@@ -485,12 +540,15 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun loadLyricsForSong(song: Song, forceRefresh: Boolean) {
+        lyricsRequestSongId = song.id
         binding.tvLyricsStatus.visibility = View.VISIBLE
         binding.tvLyricsStatus.text = getString(R.string.lyrics_loading)
 
         val repository = UltraDeepApplication.instance.lyricsRepository
         viewLifecycleOwner.lifecycleScope.launch {
             val result = repository.getLyrics(song, forceRefresh)
+            // Requests can finish out of order when the user skips quickly.
+            if (!isAdded || lyricsRequestSongId != song.id || currentSongId != song.id) return@launch
             rawLyricsCache = result.plainText
 
             if (result.isInstrumental) {
@@ -529,6 +587,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     override fun onDestroyView() {
+        stopSpeedHold()
         super.onDestroyView()
         _binding = null
     }

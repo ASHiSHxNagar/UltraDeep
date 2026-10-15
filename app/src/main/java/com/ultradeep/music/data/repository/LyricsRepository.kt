@@ -92,8 +92,11 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
 
                 if (searchResponse.isSuccessful && !searchResponse.body().isNullOrEmpty()) {
                     val list = searchResponse.body()!!
-                    // Prefer result that contains synchronized lyrics
-                    val best = list.firstOrNull { !it.syncedLyrics.isNullOrBlank() } ?: list.first()
+                    // Search can return covers/live edits. Score title, artist and duration,
+                    // while still strongly preferring synchronized LRC.
+                    val best = list.maxByOrNull { candidate ->
+                        scoreCandidate(candidate, sanitized.title, sanitized.artist, durationSec)
+                    } ?: list.first()
                     val isInstrumental = best.instrumental == true
                     val rawLyrics = best.syncedLyrics ?: best.plainLyrics ?: ""
                     val isSynced = !best.syncedLyrics.isNullOrEmpty()
@@ -151,6 +154,37 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
 
         // Return empty result if not found
         LrcResult(emptyList(), false, "")
+    }
+
+    private fun scoreCandidate(
+        candidate: com.ultradeep.music.data.remote.LrcLibResponse,
+        title: String,
+        artist: String,
+        durationSec: Long
+    ): Int {
+        fun normalize(value: String?) = value.orEmpty().lowercase()
+            .replace(Regex("[^\\p{L}\\p{N}]"), "")
+
+        val wantedTitle = normalize(title)
+        val wantedArtist = normalize(artist)
+        val resultTitle = normalize(candidate.trackName ?: candidate.name)
+        val resultArtist = normalize(candidate.artistName)
+        var score = 0
+        if (wantedTitle.isNotBlank() && resultTitle == wantedTitle) score += 80
+        else if (wantedTitle.isNotBlank() && resultTitle.isNotBlank() &&
+            (resultTitle.contains(wantedTitle) || wantedTitle.contains(resultTitle))) score += 45
+        if (wantedArtist.isNotBlank() && resultArtist == wantedArtist) score += 55
+        else if (wantedArtist.isNotBlank() && (resultArtist.contains(wantedArtist) || wantedArtist.contains(resultArtist))) score += 25
+        if (!candidate.syncedLyrics.isNullOrBlank()) score += 35
+        candidate.duration?.toLong()?.let { duration ->
+            score += when (kotlin.math.abs(duration - durationSec)) {
+                in 0..2 -> 25
+                in 3..6 -> 12
+                in 7..12 -> 4
+                else -> -20
+            }
+        }
+        return score
     }
 
     private fun fetchLyricsFromLyricsOvh(artist: String, title: String): String? {

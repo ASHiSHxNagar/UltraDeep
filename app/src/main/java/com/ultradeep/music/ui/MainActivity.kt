@@ -28,6 +28,8 @@ import com.ultradeep.music.ui.nowplaying.NowPlayingBottomSheet
 import com.ultradeep.music.ui.playlist.AddToPlaylistBottomSheet
 import com.ultradeep.music.ui.playlist.CreatePlaylistDialog
 import com.ultradeep.music.ui.settings.SettingsBottomSheet
+import com.ultradeep.music.ui.view.AmbientCardAnimator
+import com.ultradeep.music.util.PaletteUtil
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -44,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private var activeTabPosition = 0
     private var currentSearchQuery = ""
     private var favoriteSongIds = setOf<Long>()
+    private lateinit var miniPlayerAmbient: AmbientCardAnimator
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -67,6 +70,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        miniPlayerAmbient = AmbientCardAnimator(binding.miniPlayerLayout.miniPlayerRoot)
 
         setupRecyclerViews()
         setupMiniPlayer()
@@ -273,6 +277,15 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     songAdapter.setActiveSong(song.id)
+                    lifecycleScope.launch {
+                        val artUri = (art as? android.net.Uri)?.toString()
+                        val colors = PaletteUtil.extractColorsFromUri(this@MainActivity, artUri)
+                        // An old artwork job must not recolour a newly-selected track.
+                        if (MusicController.currentSong.value?.id == song.id) {
+                            miniPlayerAmbient.setColors(colors.topColor, colors.centerColor)
+                            songAdapter.setActiveSong(song.id, colors.topColor, colors.centerColor)
+                        }
+                    }
                 } else {
                     mini.miniPlayerRoot.visibility = View.GONE
                 }
@@ -396,5 +409,10 @@ class MainActivity : AppCompatActivity() {
             applyFilterAndSort()
         }
         optionsSheet.show(supportFragmentManager, com.ultradeep.music.ui.options.SongOptionsBottomSheet.TAG)
+    }
+
+    override fun onDestroy() {
+        miniPlayerAmbient.release()
+        super.onDestroy()
     }
 }
