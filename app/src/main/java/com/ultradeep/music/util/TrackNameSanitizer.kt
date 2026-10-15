@@ -10,8 +10,8 @@ object TrackNameSanitizer {
 
     private val BITRATE_REGEX = Regex("(?i)[\\(\\[]?(128k|192k|256k|320k|44\\.?1k|48k|kbps)[\\)\\]]?", RegexOption.IGNORE_CASE)
     private val EXT_REGEX = Regex("(?i)\\.(mp3|m4a|flac|aac|wav|ogg)$")
-    private val TAG_REGEX = Regex("(?i)[\\(\\[](official|audio|video|clip officiel|lyric video|music video|hd|4k|remix|slowed|reverb|viral|instrumental)[^\\)\\]]*[\\)\\]]")
-    private val FEAT_REGEX = Regex("(?i)[\\(\\[]?\\b(ft|feat|featuring)\\.?\\s+[^\\)\\]]+[\\)\\]]?")
+    private val TAG_REGEX = Regex("(?i)[\\(\\[]?(official|audio|video|clip officiel|lyric video|music video|hd|4k|remix|slowed|reverb|viral|instrumental|bhojpuri|gujarati|garba|dakla|bhajan|lokgeet|nonstop|dhol mix|dj remix|status|ringtone|audio song|video song|full song|original)[^\\)\\]]*[\\)\\]]?", RegexOption.IGNORE_CASE)
+    private val FEAT_REGEX = Regex("(?i)[\\(\\[]?\\b(ft|feat|featuring)\\.?\\s+[^\\)\\]]+[\\)\\]]?", RegexOption.IGNORE_CASE)
 
     fun sanitize(rawTitle: String, rawArtist: String): CleanTrackInfo {
         var title = rawTitle.replace(EXT_REGEX, "").trim()
@@ -42,17 +42,23 @@ object TrackNameSanitizer {
             }
         }
 
+        // If title contains pipe '|' or slash '/' (common in Indian YouTube song titles), extract main title
+        if (title.contains("|")) {
+            val parts = title.split("|")
+            title = parts[0].trim()
+        }
+
         // Clean title
         var cleanTitle = title.replace("_", " ")
         cleanTitle = BITRATE_REGEX.replace(cleanTitle, "")
         cleanTitle = TAG_REGEX.replace(cleanTitle, "")
         cleanTitle = FEAT_REGEX.replace(cleanTitle, "")
-        // Clean multiple spaces and trim
         cleanTitle = cleanTitle.replace(Regex("\\s+"), " ").trim()
 
         // Clean artist
         var cleanArtist = artist.replace("_", " ")
         cleanArtist = BITRATE_REGEX.replace(cleanArtist, "")
+        cleanArtist = TAG_REGEX.replace(cleanArtist, "")
         cleanArtist = cleanArtist.replace(Regex("\\s+"), " ").trim()
 
         if (cleanArtist.equals("Unknown Artist", ignoreCase = true) || cleanArtist.isEmpty()) {

@@ -68,8 +68,8 @@ class LyricsAdapter(
                 boxEnd: Int,
                 snapPreference: Int
             ): Int {
-                // Center around 70% of screen height
-                val targetCenter = (boxEnd - boxStart) * 0.35f
+                // Center active line in the vertical middle of the screen (~48%)
+                val targetCenter = (boxEnd - boxStart) * 0.48f
                 val viewCenter = (viewStart + viewEnd) / 2f
                 return (targetCenter - viewCenter).toInt()
             }

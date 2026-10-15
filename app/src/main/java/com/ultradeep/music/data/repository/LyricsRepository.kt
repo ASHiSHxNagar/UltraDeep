@@ -115,12 +115,61 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
                     return@withContext LrcParser.parse(rawLyrics, false)
                 }
             }
+
+            // Fallback to secondary source (Lyrics.ovh) for Hindi, Gujarati, and regional tracks
+            val ovhLyrics = fetchLyricsFromLyricsOvh(
+                artist = if (sanitized.artist != "Unknown Artist") sanitized.artist else "",
+                title = sanitized.title
+            )
+
+            if (!ovhLyrics.isNullOrBlank()) {
+                lyricsDao.insertLyrics(
+                    LyricsEntity(
+                        songId = song.id,
+                        title = song.title,
+                        artist = song.artist,
+                        durationSec = durationSec,
+                        lrcContent = ovhLyrics,
+                        isSynced = false,
+                        isCustom = false,
+                        isInstrumental = false
+                    )
+                )
+                return@withContext LrcParser.parse(ovhLyrics, false)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
         // Return empty result if not found
         LrcResult(emptyList(), false, "")
+    }
+
+    private fun fetchLyricsFromLyricsOvh(artist: String, title: String): String? {
+        if (title.isBlank()) return null
+        return try {
+            val cleanTitle = java.net.URLEncoder.encode(title.trim(), "UTF-8").replace("+", "%20")
+            val cleanArtist = if (artist.isNotBlank() && artist != "Unknown Artist") {
+                java.net.URLEncoder.encode(artist.trim(), "UTF-8").replace("+", "%20")
+            } else {
+                cleanTitle
+            }
+            val url = "https://api.lyrics.ovh/v1/$cleanArtist/$cleanTitle"
+            val request = Request.Builder().url(url).build()
+            ApiClient.okHttpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val raw = response.body?.string() ?: return@use null
+                    val json = org.json.JSONObject(raw)
+                    if (json.has("lyrics")) {
+                        val lyrics = json.getString("lyrics").trim()
+                        if (lyrics.isNotBlank()) return@use lyrics
+                    }
+                }
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     suspend fun saveCustomLyrics(song: Song, customText: String): LrcResult = withContext(Dispatchers.IO) {

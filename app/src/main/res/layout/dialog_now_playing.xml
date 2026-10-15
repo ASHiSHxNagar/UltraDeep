@@ -70,6 +70,7 @@
             android:layout_height="0dp"
             android:layout_marginTop="16dp"
             android:layout_marginBottom="8dp"
+            android:clipChildren="false"
             app:layout_constraintBottom_toTopOf="@id/pagerIndicatorLayout"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -80,17 +81,14 @@
                 android:id="@+id/artworkViewLayout"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:clipChildren="false"
                 android:visibility="visible">
 
                 <!-- Dynamic Glowing Ambient Aura directly behind Album Art -->
                 <com.ultradeep.music.ui.view.AmbientGlowView
                     android:id="@+id/ambientGlowView"
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    app:layout_constraintTop_toTopOf="@id/ivAlbumArt"
-                    app:layout_constraintBottom_toBottomOf="@id/ivAlbumArt"
-                    app:layout_constraintStart_toStartOf="@id/ivAlbumArt"
-                    app:layout_constraintEnd_toEndOf="@id/ivAlbumArt" />
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
 
                 <com.google.android.material.imageview.ShapeableImageView
                     android:id="@+id/ivAlbumArt"
@@ -184,8 +182,8 @@
                     android:layout_width="0dp"
                     android:layout_height="0dp"
                     android:clipToPadding="false"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="64dp"
+                    android:paddingTop="130dp"
+                    android:paddingBottom="160dp"
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
