@@ -28,6 +28,7 @@ import java.util.Calendar
 class SettingsBottomSheet : BottomSheetDialogFragment {
 
     private var onLibraryRescanned: (() -> Unit)? = null
+    private var openLyricsSyncSection = false
 
     constructor() : super()
 
@@ -35,8 +36,28 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
         this.onLibraryRescanned = onLibraryRescanned
     }
 
+    constructor(onLibraryRescanned: () -> Unit, openLyricsSyncSection: Boolean) : super() {
+        this.onLibraryRescanned = onLibraryRescanned
+        this.openLyricsSyncSection = openLyricsSyncSection
+    }
+
     private var _binding: DialogSettingsBinding? = null
     private val binding get() = _binding!!
+
+    override fun onStart() {
+        super.onStart()
+        dialog?.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            (resources.displayMetrics.heightPixels * 0.90f).toInt()
+        )
+        val sheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet) ?: return
+        sheet.layoutParams = sheet.layoutParams.apply { height = (resources.displayMetrics.heightPixels * 0.90f).toInt() }
+        val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(sheet)
+        behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+        behavior.skipCollapsed = true
+        behavior.peekHeight = (resources.displayMetrics.heightPixels * 0.90f).toInt()
+        if (openLyricsSyncSection) binding.scrollSettings.post { binding.scrollSettings.smoothScrollTo(0, binding.lyricsSyncSection.top) }
+    }
 
     private val pickDefaultArtLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
@@ -109,10 +130,10 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
             val currentMode = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_YES)
             if (currentMode != mode) {
                 prefs.edit().putInt("theme_mode", mode).apply()
-                dismissAllowingStateLoss()
-                view.post {
-                    AppCompatDelegate.setDefaultNightMode(mode)
-                }
+                // AppCompat recreates the active Activity as soon as the mode changes.
+                // Posting through a view after dismissing this sheet could lose the
+                // callback, leaving the selected theme unapplied until the next launch.
+                AppCompatDelegate.setDefaultNightMode(mode)
             }
         }
 
@@ -223,20 +244,25 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
             var checked = 0
             var downloaded = 0
             var skipped = 0
-            candidates.forEach { song ->
-                checked++
-                if (repository.hasSavedLyrics(song.id)) {
-                    skipped++
-                } else {
-                    val result = repository.getLyrics(song, forceRefresh = true)
-                    if (result.lines.isNotEmpty() || result.isInstrumental) downloaded++
+            try {
+                candidates.forEach { song ->
+                    checked++
+                    if (repository.hasSavedLyrics(song.id)) {
+                        skipped++
+                    } else {
+                        val result = repository.getLyrics(song, forceRefresh = true)
+                        if (result.lines.isNotEmpty() || result.isInstrumental) downloaded++
+                    }
+                    binding.tvLyricsSyncStatus.text = "Checking $checked/${candidates.size} • saved $downloaded • skipped $skipped"
                 }
-                binding.tvLyricsSyncStatus.text = "Checking $checked/${candidates.size} • saved $downloaded • skipped $skipped"
+                binding.tvLyricsSyncStatus.text = "Finished: $downloaded saved, $skipped already saved."
+                Toast.makeText(requireContext(), "Lyrics sync complete", Toast.LENGTH_SHORT).show()
+            } catch (error: Exception) {
+                binding.tvLyricsSyncStatus.text = "Sync stopped: ${error.localizedMessage ?: "please try again"}"
+            } finally {
+                binding.btnSyncMissingLyrics.isEnabled = true
+                binding.btnSyncLyricsAfterDate.isEnabled = true
             }
-            binding.btnSyncMissingLyrics.isEnabled = true
-            binding.btnSyncLyricsAfterDate.isEnabled = true
-            binding.tvLyricsSyncStatus.text = "Finished: $downloaded saved, $skipped already saved."
-            Toast.makeText(requireContext(), "Lyrics sync complete", Toast.LENGTH_SHORT).show()
         }
     }
 

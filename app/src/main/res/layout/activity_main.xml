@@ -62,6 +62,16 @@
                     android:contentDescription="Settings"
                     android:src="@drawable/ic_settings"
                     app:tint="@color/text_primary" />
+
+                <ImageButton
+                    android:id="@+id/btnLyricsSync"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="2dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Fetch and sync lyrics"
+                    android:src="@drawable/ic_lyrics"
+                    app:tint="@color/neon_cyan" />
             </LinearLayout>
         </androidx.appcompat.widget.Toolbar>
 

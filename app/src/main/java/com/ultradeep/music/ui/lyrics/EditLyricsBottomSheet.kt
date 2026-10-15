@@ -1,19 +1,21 @@
 package com.ultradeep.music.ui.lyrics
 
 import android.os.Bundle
+import android.app.Dialog
 import android.text.InputType
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.ultradeep.music.R
 import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.data.model.Song
@@ -40,6 +42,20 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
     private var _binding: DialogEditLyricsBinding? = null
     private val binding get() = _binding!!
     private data class RowViews(val time: EditText, val lyric: EditText)
+
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog =
+        (super.onCreateDialog(savedInstanceState) as BottomSheetDialog).apply {
+            setOnShowListener {
+                val sheet = findViewById<View>(com.google.android.material.R.id.design_bottom_sheet) ?: return@setOnShowListener
+                val height = (resources.displayMetrics.heightPixels * 0.96f).toInt()
+                sheet.layoutParams = sheet.layoutParams.apply { this.height = height }
+                BottomSheetBehavior.from(sheet).apply {
+                    state = BottomSheetBehavior.STATE_EXPANDED
+                    skipCollapsed = true
+                    peekHeight = height
+                }
+            }
+        }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = DialogEditLyricsBinding.inflate(inflater, container, false)
@@ -83,46 +99,42 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
 
     private fun addRow(timestamp: String, lyricText: String) {
         val context = requireContext()
-        val horizontal = HorizontalScrollView(context).apply {
-            isHorizontalScrollBarEnabled = true
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = (8 * resources.displayMetrics.density).toInt()
-            }
-        }
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(4, 2, 4, 2)
+            setPadding(0, 4, 0, 4)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
         val time = EditText(context).apply {
             setText(timestamp)
             hint = "HH:MM:SS"
             inputType = InputType.TYPE_CLASS_TEXT
             setSingleLine(true)
+            setHorizontallyScrolling(true)
             textSize = 13f
             setTextColor(ContextCompat.getColor(context, R.color.text_primary))
             setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
-            background = ContextCompat.getDrawable(context, R.drawable.bg_pill_sort)
-            setPadding(14, 0, 14, 0)
-            layoutParams = LinearLayout.LayoutParams((112 * resources.displayMetrics.density).toInt(), (44 * resources.displayMetrics.density).toInt())
+            background = ContextCompat.getDrawable(context, R.drawable.bg_lyrics_editor)
+            setPadding(10, 0, 8, 0)
+            layoutParams = LinearLayout.LayoutParams((126 * resources.displayMetrics.density).toInt(), (48 * resources.displayMetrics.density).toInt())
         }
         val lyric = EditText(context).apply {
             setText(lyricText)
             hint = "Lyric"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            minLines = 1
-            maxLines = 3
-            textSize = 15f
+            inputType = InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+            setHorizontallyScrolling(true)
+            textSize = 14f
             setTextColor(ContextCompat.getColor(context, R.color.text_primary))
             setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
-            background = ContextCompat.getDrawable(context, R.drawable.bg_pill_sort)
-            setPadding(14, 0, 14, 0)
-            layoutParams = LinearLayout.LayoutParams((300 * resources.displayMetrics.density).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = (8 * resources.displayMetrics.density).toInt()
+            background = ContextCompat.getDrawable(context, R.drawable.bg_lyrics_editor)
+            setPadding(10, 0, 8, 0)
+            layoutParams = LinearLayout.LayoutParams(0, (48 * resources.displayMetrics.density).toInt(), 1f).apply {
+                marginStart = (7 * resources.displayMetrics.density).toInt()
             }
         }
-        row.addView(time); row.addView(lyric); horizontal.addView(row)
-        binding.lyricsRowsContainer.addView(horizontal)
+        row.addView(time); row.addView(lyric)
+        binding.lyricsRowsContainer.addView(row)
         rows += RowViews(time, lyric)
     }
 

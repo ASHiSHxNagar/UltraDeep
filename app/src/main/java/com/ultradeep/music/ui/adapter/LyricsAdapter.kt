@@ -126,6 +126,7 @@ class LyricsAdapter(
 
     inner class LyricViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvLine: TextView = itemView.findViewById(R.id.tvLyricLine)
+        private var wasActive = false
 
         init {
             itemView.setOnClickListener {
@@ -150,17 +151,26 @@ class LyricsAdapter(
                 tvLine.textSize = 26f
                 tvLine.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD))
                 tvLine.alpha = 1.0f
+                tvLine.scaleX = 0.86f
+                tvLine.scaleY = 0.86f
                 itemView.scaleX = 0.94f
                 itemView.scaleY = 0.94f
-                itemView.translationY = 18f
-                itemView.animate().translationY(0f).scaleX(1.04f).scaleY(1.04f).setDuration(220).start()
+                itemView.translationY = 14f
+                tvLine.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(280).start()
+                itemView.animate().translationY(0f).scaleX(1f).scaleY(1f).setDuration(240).start()
             } else {
                 tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_inactive_lyric))
                 tvLine.textSize = 20f
                 tvLine.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
                 tvLine.alpha = 0.65f
-                itemView.animate().translationY(0f).scaleX(0.96f).scaleY(0.96f).setDuration(160).start()
+                tvLine.scaleX = if (wasActive) 1f else 0.90f
+                tvLine.scaleY = if (wasActive) 1f else 0.90f
+                if (wasActive) {
+                    tvLine.animate().scaleX(0.90f).scaleY(0.90f).alpha(0.65f).setDuration(200).start()
+                }
+                itemView.animate().translationY(0f).scaleX(0.96f).scaleY(0.96f).setDuration(180).start()
             }
+            wasActive = isActive
         }
     }
 }

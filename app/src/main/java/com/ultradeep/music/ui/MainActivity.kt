@@ -206,6 +206,11 @@ class MainActivity : AppCompatActivity() {
             settingsSheet.show(supportFragmentManager, SettingsBottomSheet.TAG)
         }
 
+        binding.btnLyricsSync.setOnClickListener {
+            SettingsBottomSheet({ scanLocalAudio() }, openLyricsSyncSection = true)
+                .show(supportFragmentManager, SettingsBottomSheet.TAG)
+        }
+
         binding.fabAddPlaylist.setOnClickListener {
             val dialog = CreatePlaylistDialog {}
             dialog.show(supportFragmentManager, CreatePlaylistDialog.TAG)

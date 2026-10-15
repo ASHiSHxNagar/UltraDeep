@@ -2,6 +2,7 @@ package com.ultradeep.music.ui.view
 
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
@@ -23,9 +24,11 @@ class WavyAmbientBorderView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    // Solid dark surface interior
+    private val isLightTheme = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES
+
+    // The mini player follows the selected theme instead of forcing an AMOLED slab.
     private val surfacePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#12111A")
+        color = Color.parseColor(if (isLightTheme) "#F4F6FA" else "#12111A")
         style = Paint.Style.FILL
     }
 
@@ -107,7 +110,7 @@ class WavyAmbientBorderView @JvmOverloads constructor(
         canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, surfacePaint)
 
         // 2. Soft pulsing ambient glow fill
-        val auraPulse = 0.15f + 0.10f * sin(animTime * 0.8f)
+        val auraPulse = if (isLightTheme) 0.035f + 0.025f * sin(animTime * 0.8f) else 0.15f + 0.10f * sin(animTime * 0.8f)
         val alphaInt = (auraPulse * 255).toInt().coerceIn(20, 80)
         auraPaint.color = Color.argb(
             alphaInt,
