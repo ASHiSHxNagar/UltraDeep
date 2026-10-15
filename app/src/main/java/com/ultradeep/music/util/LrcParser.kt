@@ -70,11 +70,11 @@ object LrcParser {
                 isCustom = isCustom
             )
         } else {
-            // Treat as plain unsynced lyrics
+            // Treat as plain unsynced lyrics: use -1L timestamp so it does not falsely auto-scroll
             val plainLines = content.lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
-                .mapIndexed { index, text -> LyricLine(index * 1000L, text) }
+                .map { text -> LyricLine(-1L, text) }
                 .toList()
 
             LrcResult(

@@ -91,7 +91,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
     private fun setupLyricsRecyclerView() {
         lyricsAdapter = LyricsAdapter { timestampMs ->
-            val seekTarget = (timestampMs - currentSongOffsetMs).coerceAtLeast(0L)
+            val seekTarget = (timestampMs + currentSongOffsetMs).coerceAtLeast(0L)
             MusicController.seekTo(seekTarget)
         }
 
@@ -241,7 +241,6 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         binding.lyricsViewLayout.setOnTouchListener { _, event ->
             lyricsGestureDetector.onTouchEvent(event)
-            true
         }
 
         // Also intercept horizontal swipe right on the lyrics recyclerview without breaking vertical scroll
@@ -262,29 +261,43 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             prefs.edit().putLong("lyrics_offset_$currentSongId", currentSongOffsetMs).apply()
         }
         updateOffsetUI()
-        lyricsAdapter.updatePosition(MusicController.currentPosition.value, binding.rvLyrics, currentSongOffsetMs)
+        lyricsAdapter.updatePosition(
+            MusicController.currentPosition.value,
+            binding.rvLyrics,
+            currentSongOffsetMs,
+            forceScroll = true
+        )
     }
 
     private fun updateOffsetUI() {
         val seconds = currentSongOffsetMs / 1000f
-        binding.tvCurrentOffset.text = String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
+        binding.tvCurrentOffset.text = if (currentSongOffsetMs == 0L) {
+            "Sync: 0.0s"
+        } else {
+            String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
+        }
     }
 
     private fun showCustomOffsetInputDialog() {
         val input = EditText(requireContext()).apply {
-            hint = "e.g. 0.5 or -2.0 or 5.0"
+            hint = "e.g. 5.0 or 0.5 or -2.0"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
             setText(String.format(Locale.getDefault(), "%.1f", currentSongOffsetMs / 1000f))
         }
 
+        val container = FrameLayout(requireContext()).apply {
+            setPadding(60, 24, 60, 0)
+            addView(input)
+        }
+
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Set Lyrics Delay Timer")
-            .setMessage("Enter seconds to advance (+) or delay (-) the synchronized lyrics for this song:")
-            .setView(input)
+            .setMessage("Enter delay in seconds. For example, enter 5.0 so lyrics start 5 seconds later (use negative - to advance):")
+            .setView(container)
             .setPositiveButton("Save") { _, _ ->
                 val sec = input.text.toString().toDoubleOrNull() ?: 0.0
                 setSyncOffset((sec * 1000).toLong())
-                Toast.makeText(requireContext(), "Lyrics offset saved permanently!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Lyrics sync timer saved permanently!", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()

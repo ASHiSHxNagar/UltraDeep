@@ -28,7 +28,10 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
                     isInstrumental = true
                 )
             }
-            return@withContext LrcParser.parse(cached.lrcContent, false)
+            // If already cached with synchronized timestamps, return immediately
+            if (cached.isSynced) {
+                return@withContext LrcParser.parse(cached.lrcContent, false)
+            }
         }
 
         // Fetch from LRCLIB API
@@ -139,6 +142,11 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+
+        // Fallback to cached lyrics if network search fails
+        if (cached != null) {
+            return@withContext LrcParser.parse(cached.lrcContent, false)
         }
 
         // Return empty result if not found

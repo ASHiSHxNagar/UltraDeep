@@ -16,6 +16,6 @@
         android:lineSpacingExtra="6dp"
         android:text="Lyric Line"
         android:textColor="@color/text_inactive_lyric"
-        android:textSize="17sp" />
+        android:textSize="19sp" />
 
 </FrameLayout>

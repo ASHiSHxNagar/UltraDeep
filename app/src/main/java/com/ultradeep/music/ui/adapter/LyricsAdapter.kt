@@ -30,10 +30,18 @@ class LyricsAdapter(
         notifyDataSetChanged()
     }
 
-    fun updatePosition(currentPositionMs: Long, recyclerView: RecyclerView, offsetMs: Long = 0L) {
+    fun updatePosition(
+        currentPositionMs: Long,
+        recyclerView: RecyclerView,
+        offsetMs: Long = 0L,
+        forceScroll: Boolean = false
+    ) {
         if (lines.isEmpty()) return
+        // Do not auto-scroll if lines have no timestamps (unsynced plain lyrics)
+        if (lines.firstOrNull()?.timestampMs == -1L) return
 
-        val effectivePos = (currentPositionMs + offsetMs).coerceAtLeast(0L)
+        // Delay timer formula: positive offsetMs delays lyrics (lyrics appear later)
+        val effectivePos = (currentPositionMs - offsetMs).coerceAtLeast(0L)
         var newIndex = -1
         for (i in lines.indices) {
             val line = lines[i]
@@ -44,13 +52,13 @@ class LyricsAdapter(
             }
         }
 
-        if (newIndex != activeIndex) {
+        if (newIndex != activeIndex || forceScroll) {
             val oldIndex = activeIndex
             activeIndex = newIndex
             if (oldIndex in lines.indices) notifyItemChanged(oldIndex)
             if (activeIndex in lines.indices) notifyItemChanged(activeIndex)
 
-            if (activeIndex in lines.indices && !isUserScrolling) {
+            if (activeIndex in lines.indices && (!isUserScrolling || forceScroll)) {
                 smoothScrollToActiveLine(recyclerView, activeIndex)
             }
         }
@@ -68,14 +76,14 @@ class LyricsAdapter(
                 boxEnd: Int,
                 snapPreference: Int
             ): Int {
-                // Center active line in the vertical middle of the screen (~48%)
-                val targetCenter = (boxEnd - boxStart) * 0.48f
-                val viewCenter = (viewStart + viewEnd) / 2f
-                return (targetCenter - viewCenter).toInt()
+                // Exact vertical centering of active line in the visible area
+                val boxCenter = (boxStart + boxEnd) / 2
+                val viewCenter = (viewStart + viewEnd) / 2
+                return boxCenter - viewCenter
             }
 
             override fun calculateSpeedPerPixel(displayMetrics: DisplayMetrics): Float {
-                return 40f / displayMetrics.densityDpi
+                return 35f / displayMetrics.densityDpi
             }
         }
 
@@ -106,7 +114,10 @@ class LyricsAdapter(
             itemView.setOnClickListener {
                 val pos = bindingAdapterPosition
                 if (pos in lines.indices) {
-                    onLyricClicked(lines[pos].timestampMs)
+                    val ts = lines[pos].timestampMs
+                    if (ts >= 0) {
+                        onLyricClicked(ts)
+                    }
                 }
             }
         }
@@ -114,15 +125,15 @@ class LyricsAdapter(
         fun bind(line: LyricLine, isActive: Boolean) {
             tvLine.text = line.text
             if (isActive) {
-                // Spotify Active Lyric: High-contrast pure white, bold sans-serif, larger font
+                // Spotify Active Lyric: High-contrast pure white, bold sans-serif, increased font (+2sp)
                 tvLine.setTextColor(Color.WHITE)
-                tvLine.textSize = 24f
+                tvLine.textSize = 26f
                 tvLine.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD))
                 tvLine.alpha = 1.0f
             } else {
-                // Spotify Inactive Lyric: Muted slate-cyan, semi-bold
+                // Spotify Inactive Lyric: Muted slate-cyan, semi-bold (+2sp)
                 tvLine.setTextColor(Color.parseColor("#7D9B9B"))
-                tvLine.textSize = 18f
+                tvLine.textSize = 20f
                 tvLine.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
                 tvLine.alpha = 0.65f
             }
