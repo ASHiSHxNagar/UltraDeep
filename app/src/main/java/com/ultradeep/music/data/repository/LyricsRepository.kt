@@ -128,7 +128,23 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
             val request = Request.Builder().url(url).build()
             ApiClient.okHttpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    response.body?.string()
+                    val raw = response.body?.string() ?: return@use null
+                    if (raw.trim().startsWith("{")) {
+                        try {
+                            val json = org.json.JSONObject(raw)
+                            if (json.has("syncedLyrics") && !json.isNull("syncedLyrics")) {
+                                val synced = json.getString("syncedLyrics")
+                                if (synced.isNotBlank()) return@use synced
+                            }
+                            if (json.has("plainLyrics") && !json.isNull("plainLyrics")) {
+                                val plain = json.getString("plainLyrics")
+                                if (plain.isNotBlank()) return@use plain
+                            }
+                        } catch (e: Exception) {
+                            // Fallback to raw text if json parsing fails
+                        }
+                    }
+                    raw
                 } else null
             }
         } catch (e: Exception) {
