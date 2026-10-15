@@ -10,12 +10,14 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
+import coil.load
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.ultradeep.music.R
 import com.ultradeep.music.databinding.DialogSettingsBinding
 import com.ultradeep.music.scanner.AudioScanner
 import com.ultradeep.music.service.MusicController
 import com.ultradeep.music.util.ArtworkManager
+import com.ultradeep.music.util.BackupManager
 import com.ultradeep.music.util.FileUtil
 import kotlinx.coroutines.launch
 
@@ -26,17 +28,42 @@ class SettingsBottomSheet(
     private var _binding: DialogSettingsBinding? = null
     private val binding get() = _binding!!
 
-    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+    private val pickDefaultArtLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            val dest = ArtworkManager.getGlobalCustomBgFile(requireContext())
+            val dest = ArtworkManager.getGlobalDefaultArtworkFile(requireContext())
             val success = FileUtil.copyUriToFile(requireContext(), uri, dest)
             if (success) {
-                val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("custom_ambient_enabled", true).apply()
-                updateBackgroundStatus()
-                Toast.makeText(requireContext(), "Custom background image saved!", Toast.LENGTH_SHORT).show()
+                updateDefaultArtUI()
+                onLibraryRescanned()
+                Toast.makeText(requireContext(), "Default artwork updated for all songs!", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(requireContext(), "Failed to save image", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private val importBackupLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val inputStream = requireContext().contentResolver.openInputStream(uri)
+                    val jsonText = inputStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    if (jsonText.isNotBlank()) {
+                        val result = BackupManager.restoreBackup(requireContext(), jsonText)
+                        updateDefaultArtUI()
+                        onLibraryRescanned()
+                        Toast.makeText(
+                            requireContext(),
+                            "Backup restored! ${result.lyricsCount} lyrics, ${result.favoritesCount} favs, ${result.playlistsCount} playlists, ${result.artworksCount} arts.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Empty backup file", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(requireContext(), "Failed to restore backup: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -73,20 +100,39 @@ class SettingsBottomSheet(
             AppCompatDelegate.setDefaultNightMode(mode)
         }
 
-        updateBackgroundStatus()
+        // Setup Default Track Artwork
+        updateDefaultArtUI()
 
-        binding.btnPickCustomBg.setOnClickListener {
-            pickImageLauncher.launch("image/*")
+        binding.btnPickDefaultArt.setOnClickListener {
+            pickDefaultArtLauncher.launch("image/*")
         }
 
-        binding.btnClearCustomBg.setOnClickListener {
-            val file = ArtworkManager.getGlobalCustomBgFile(requireContext())
+        binding.btnResetDefaultArt.setOnClickListener {
+            val file = ArtworkManager.getGlobalDefaultArtworkFile(requireContext())
             if (file.exists()) file.delete()
-            prefs.edit().putBoolean("custom_ambient_enabled", false).apply()
-            updateBackgroundStatus()
-            Toast.makeText(requireContext(), "Reverted to 10 generative artworks", Toast.LENGTH_SHORT).show()
+            updateDefaultArtUI()
+            onLibraryRescanned()
+            Toast.makeText(requireContext(), "Reverted to Car Default Photo", Toast.LENGTH_SHORT).show()
         }
 
+        // Setup Backup & Restore
+        binding.btnExportBackup.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val shareIntent = BackupManager.exportBackupAndShare(requireContext())
+                    startActivity(Intent.createChooser(shareIntent, "Save or Share UltraDeep Backup"))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(requireContext(), "Backup export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        binding.btnImportBackup.setOnClickListener {
+            importBackupLauncher.launch("*/*")
+        }
+
+        // Setup Rescan Storage
         binding.btnRescanStorage.setOnClickListener {
             binding.tvRescanStatus.text = getString(R.string.rescanning)
             binding.btnRescanStorage.isEnabled = false
@@ -102,17 +148,21 @@ class SettingsBottomSheet(
         }
     }
 
-    private fun updateBackgroundStatus() {
-        val file = ArtworkManager.getGlobalCustomBgFile(requireContext())
-        val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
-        val isEnabled = prefs.getBoolean("custom_ambient_enabled", false)
+    private fun updateDefaultArtUI() {
+        val hasCustom = ArtworkManager.hasCustomGlobalDefault(requireContext())
+        val defaultArt = ArtworkManager.getGlobalDefaultArtwork(requireContext())
 
-        if (isEnabled && file.exists() && file.length() > 0) {
-            binding.tvCustomBgStatus.text = "Active: Global Custom Wallpaper"
-            binding.tvCustomBgStatus.setTextColor(requireContext().getColor(R.color.neon_cyan))
+        binding.ivDefaultArtPreview.load(defaultArt) {
+            crossfade(true)
+            placeholder(R.drawable.bg_artwork_placeholder)
+        }
+
+        if (hasCustom) {
+            binding.tvDefaultArtStatus.text = "Active: Custom Default Photo"
+            binding.tvDefaultArtStatus.setTextColor(requireContext().getColor(R.color.neon_cyan))
         } else {
-            binding.tvCustomBgStatus.text = "Active: 10 Generative AI Artworks & Dynamic Ambient"
-            binding.tvCustomBgStatus.setTextColor(requireContext().getColor(R.color.text_primary))
+            binding.tvDefaultArtStatus.text = "Active: Car Default Photo"
+            binding.tvDefaultArtStatus.setTextColor(requireContext().getColor(R.color.text_primary))
         }
     }
 

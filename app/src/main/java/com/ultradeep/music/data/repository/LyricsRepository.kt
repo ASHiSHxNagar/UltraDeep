@@ -34,11 +34,21 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
         // Fetch from LRCLIB API
         try {
             val durationSec = song.duration / 1000
-            val response = ApiClient.lrcLibService.getLyrics(
-                trackName = song.title,
-                artistName = song.artist,
+            val sanitized = com.ultradeep.music.util.TrackNameSanitizer.sanitize(song.title, song.artist)
+
+            var response = ApiClient.lrcLibService.getLyrics(
+                trackName = sanitized.title,
+                artistName = if (sanitized.artist != "Unknown Artist") sanitized.artist else "",
                 durationSec = durationSec
             )
+
+            if (!response.isSuccessful && (sanitized.title != song.title || sanitized.artist != song.artist)) {
+                response = ApiClient.lrcLibService.getLyrics(
+                    trackName = song.title,
+                    artistName = song.artist,
+                    durationSec = durationSec
+                )
+            }
 
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
@@ -66,13 +76,24 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
 
                 return@withContext LrcParser.parse(rawLyrics, false)
             } else {
-                // Try search fallback
-                val searchResponse = ApiClient.lrcLibService.searchLyrics("${song.title} ${song.artist}".trim())
+                // Try smart search with sanitized query (e.g. "Jessie J Price Tag")
+                var searchResponse = ApiClient.lrcLibService.searchLyrics(sanitized.searchQuery)
+                if (!searchResponse.isSuccessful || searchResponse.body().isNullOrEmpty()) {
+                    if (sanitized.title.isNotBlank() && sanitized.title != sanitized.searchQuery) {
+                        searchResponse = ApiClient.lrcLibService.searchLyrics(sanitized.title)
+                    }
+                }
+                if (!searchResponse.isSuccessful || searchResponse.body().isNullOrEmpty()) {
+                    searchResponse = ApiClient.lrcLibService.searchLyrics("${song.title} ${song.artist}".trim())
+                }
+
                 if (searchResponse.isSuccessful && !searchResponse.body().isNullOrEmpty()) {
-                    val first = searchResponse.body()!!.first()
-                    val isInstrumental = first.instrumental == true
-                    val rawLyrics = first.syncedLyrics ?: first.plainLyrics ?: ""
-                    val isSynced = !first.syncedLyrics.isNullOrEmpty()
+                    val list = searchResponse.body()!!
+                    // Prefer result that contains synchronized lyrics
+                    val best = list.firstOrNull { !it.syncedLyrics.isNullOrBlank() } ?: list.first()
+                    val isInstrumental = best.instrumental == true
+                    val rawLyrics = best.syncedLyrics ?: best.plainLyrics ?: ""
+                    val isSynced = !best.syncedLyrics.isNullOrEmpty()
 
                     lyricsDao.insertLyrics(
                         LyricsEntity(

@@ -3,9 +3,12 @@ package com.ultradeep.music.ui.nowplaying
 import android.app.Dialog
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -44,13 +47,12 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     private lateinit var lyricsAdapter: LyricsAdapter
     private var isLyricsModeActive = false
     private var isUserTrackingSeekBar = false
-    private var currentSongId: Long = -1L
+
     private var rawLyricsCache: String = ""
     private var currentSongOffsetMs: Long = 0L
+    private var currentSongId: Long = -1L
 
-    private val prefs: SharedPreferences by lazy {
-        requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
-    }
+    private lateinit var prefs: SharedPreferences
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val dialog = super.onCreateDialog(savedInstanceState) as BottomSheetDialog
@@ -72,6 +74,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        prefs = requireContext().getSharedPreferences("lyrics_timer_prefs", Context.MODE_PRIVATE)
         _binding = DialogNowPlayingBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -81,8 +84,9 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         setupLyricsRecyclerView()
         setupListeners()
+        setupSwipeGestures()
         observeMusicController()
-        checkCustomBackground()
+        updateIndicators(isLyrics = false)
     }
 
     private fun setupLyricsRecyclerView() {
@@ -167,6 +171,14 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             showCustomOffsetInputDialog()
         }
 
+        binding.dotArtwork.setOnClickListener {
+            if (isLyricsModeActive) toggleLyricsMode(false)
+        }
+
+        binding.dotLyrics.setOnClickListener {
+            if (!isLyricsModeActive) toggleLyricsMode(true)
+        }
+
         binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -186,6 +198,56 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                 val progress = seekBar?.progress ?: 0
                 val targetMs = (progress / 1000f * duration).toLong()
                 MusicController.seekTo(targetMs)
+            }
+        })
+    }
+
+    private fun setupSwipeGestures() {
+        val swipeThreshold = 80
+        val swipeVelocityThreshold = 100
+
+        // Gesture detector for Artwork view: swipe left triggers lyrics
+        val artworkGestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float): Boolean {
+                if (e1 == null || e2 == null) return false
+                val diffX = e1.x - e2.x
+                val diffY = e1.y - e2.y
+                if (Math.abs(diffX) > Math.abs(diffY) && diffX > swipeThreshold && Math.abs(velocityX) > swipeVelocityThreshold) {
+                    toggleLyricsMode(true)
+                    return true
+                }
+                return false
+            }
+        })
+
+        // Gesture detector for Lyrics view: swipe right triggers artwork
+        val lyricsGestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float): Boolean {
+                if (e1 == null || e2 == null) return false
+                val diffX = e2.x - e1.x
+                val diffY = e2.y - e1.y
+                if (Math.abs(diffX) > Math.abs(diffY) && diffX > swipeThreshold && Math.abs(velocityX) > swipeVelocityThreshold) {
+                    toggleLyricsMode(false)
+                    return true
+                }
+                return false
+            }
+        })
+
+        binding.artworkViewLayout.setOnTouchListener { _, event ->
+            artworkGestureDetector.onTouchEvent(event)
+            true
+        }
+
+        binding.lyricsViewLayout.setOnTouchListener { _, event ->
+            lyricsGestureDetector.onTouchEvent(event)
+            true
+        }
+
+        // Also intercept horizontal swipe right on the lyrics recyclerview without breaking vertical scroll
+        binding.rvLyrics.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                return lyricsGestureDetector.onTouchEvent(e)
             }
         })
     }
@@ -229,17 +291,76 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun toggleLyricsMode(showLyrics: Boolean) {
+        if (isLyricsModeActive == showLyrics) return
         isLyricsModeActive = showLyrics
+        val width = binding.contentContainer.width.toFloat().let { if (it > 0) it else 1000f }
+
         if (showLyrics) {
-            binding.artworkViewLayout.visibility = View.GONE
+            // Animate Artwork sliding LEFT out, Lyrics sliding in from RIGHT
+            binding.lyricsViewLayout.translationX = width
+            binding.lyricsViewLayout.alpha = 0f
             binding.lyricsViewLayout.visibility = View.VISIBLE
+
+            binding.artworkViewLayout.animate()
+                .translationX(-width)
+                .alpha(0f)
+                .setDuration(280)
+                .withEndAction {
+                    binding.artworkViewLayout.visibility = View.GONE
+                }
+                .start()
+
+            binding.lyricsViewLayout.animate()
+                .translationX(0f)
+                .alpha(1f)
+                .setDuration(280)
+                .start()
+
             binding.btnToggleLyricsMode.text = getString(R.string.now_playing)
             binding.btnToggleLyricsMode.setIconResource(R.drawable.ic_album)
+            updateIndicators(isLyrics = true)
         } else {
-            binding.lyricsViewLayout.visibility = View.GONE
+            // Animate Lyrics sliding RIGHT out, Artwork sliding in from LEFT
+            binding.artworkViewLayout.translationX = -width
+            binding.artworkViewLayout.alpha = 0f
             binding.artworkViewLayout.visibility = View.VISIBLE
+
+            binding.lyricsViewLayout.animate()
+                .translationX(width)
+                .alpha(0f)
+                .setDuration(280)
+                .withEndAction {
+                    binding.lyricsViewLayout.visibility = View.GONE
+                }
+                .start()
+
+            binding.artworkViewLayout.animate()
+                .translationX(0f)
+                .alpha(1f)
+                .setDuration(280)
+                .start()
+
             binding.btnToggleLyricsMode.text = getString(R.string.lyrics_title)
             binding.btnToggleLyricsMode.setIconResource(R.drawable.ic_lyrics)
+            updateIndicators(isLyrics = false)
+        }
+    }
+
+    private fun updateIndicators(isLyrics: Boolean) {
+        val activeColor = ContextCompat.getColor(requireContext(), R.color.neon_cyan)
+        val inactiveColor = ContextCompat.getColor(requireContext(), R.color.text_tertiary)
+
+        binding.dotArtwork.backgroundTintList = ColorStateList.valueOf(if (!isLyrics) activeColor else inactiveColor)
+        binding.dotLyrics.backgroundTintList = ColorStateList.valueOf(if (isLyrics) activeColor else inactiveColor)
+
+        val activeWidth = (16 * resources.displayMetrics.density).toInt()
+        val inactiveWidth = (6 * resources.displayMetrics.density).toInt()
+
+        binding.dotArtwork.layoutParams = binding.dotArtwork.layoutParams.apply {
+            width = if (!isLyrics) activeWidth else inactiveWidth
+        }
+        binding.dotLyrics.layoutParams = binding.dotLyrics.layoutParams.apply {
+            width = if (isLyrics) activeWidth else inactiveWidth
         }
     }
 
@@ -270,52 +391,50 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                     }
                     binding.tvCurrentTime.text = formatTime(posMs)
                 }
+
+                // Sync lyrics auto-scroll and highlight
                 lyricsAdapter.updatePosition(posMs, binding.rvLyrics, currentSongOffsetMs)
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            MusicController.duration.collectLatest { durMs ->
-                binding.tvTotalDuration.text = formatTime(durMs)
+            MusicController.duration.collectLatest { durationMs ->
+                binding.tvTotalTime.text = formatTime(durationMs)
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            MusicController.isShuffle.collectLatest { isShuffle ->
-                binding.btnShuffle.imageTintList = ContextCompat.getColorStateList(
-                    requireContext(),
-                    if (isShuffle) R.color.neon_cyan else R.color.text_secondary
-                )
+            MusicController.repeatMode.collectLatest { mode ->
+                when (mode) {
+                    Player.REPEAT_MODE_OFF -> {
+                        binding.btnRepeat.setImageResource(R.drawable.ic_repeat)
+                        binding.btnRepeat.alpha = 0.5f
+                    }
+                    Player.REPEAT_MODE_ALL -> {
+                        binding.btnRepeat.setImageResource(R.drawable.ic_repeat)
+                        binding.btnRepeat.alpha = 1.0f
+                    }
+                    Player.REPEAT_MODE_ONE -> {
+                        binding.btnRepeat.setImageResource(R.drawable.ic_repeat_one)
+                        binding.btnRepeat.alpha = 1.0f
+                    }
+                }
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            MusicController.repeatMode.collectLatest { repeatMode ->
-                val iconRes = when (repeatMode) {
-                    Player.REPEAT_MODE_ONE -> R.drawable.ic_repeat_one
-                    else -> R.drawable.ic_repeat
-                }
-                val colorRes = when (repeatMode) {
-                    Player.REPEAT_MODE_OFF -> R.color.text_secondary
-                    else -> R.color.neon_cyan
-                }
-                binding.btnRepeat.setImageResource(iconRes)
-                binding.btnRepeat.imageTintList = ContextCompat.getColorStateList(requireContext(), colorRes)
+            MusicController.shuffleMode.collectLatest { shuffleOn ->
+                binding.btnShuffle.alpha = if (shuffleOn) 1.0f else 0.5f
             }
         }
     }
 
     private fun updateSongUI(song: Song) {
-        val isNewSong = song.id != currentSongId
         currentSongId = song.id
-
-        if (isNewSong) {
-            currentSongOffsetMs = prefs.getLong("lyrics_offset_${song.id}", 0L)
-            updateOffsetUI()
-        }
+        currentSongOffsetMs = prefs.getLong("lyrics_offset_${song.id}", 0L)
+        updateOffsetUI()
 
         binding.tvTitle.text = song.title
-        binding.tvTitle.isSelected = true // Enable marquee scrolling
         binding.tvArtist.text = song.artist
 
         // Load album art via ArtworkManager
@@ -326,15 +445,13 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             error(R.drawable.bg_artwork_placeholder)
         }
 
-        // Extract palette ambient colors
+        // Extract palette ambient colors and illuminate the ambient glow
         viewLifecycleOwner.lifecycleScope.launch {
-            val artUri = if (art is Uri) art.toString() else song.albumArtUri
+            val artUri = if (art is Uri) art.toString() else null
             val colors = PaletteUtil.extractColorsFromUri(requireContext(), artUri)
             binding.ambientBackground.setAmbientColors(colors)
+            binding.ambientGlowView.setGlowColors(colors.topColor, colors.centerColor)
         }
-
-        // Check custom background
-        checkCustomBackground()
 
         // Observe favorite state
         val favoriteDao = UltraDeepApplication.instance.database.favoriteDao()
@@ -388,26 +505,6 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             } else {
                 favoriteDao.addFavorite(FavoriteSongEntity(song.id))
             }
-        }
-    }
-
-    private fun checkCustomBackground() {
-        val currentSong = MusicController.currentSong.value
-        if (currentSong != null) {
-            val customSongArt = ArtworkManager.getCustomArtworkFile(requireContext(), currentSong.id)
-            if (customSongArt.exists() && customSongArt.length() > 0) {
-                binding.ambientBackground.setCustomBackgroundImage(Uri.fromFile(customSongArt))
-                return
-            }
-        }
-
-        val isCustomEnabled = prefs.getBoolean("custom_ambient_enabled", false)
-        val globalCustomBg = ArtworkManager.getGlobalCustomBgFile(requireContext())
-
-        if (isCustomEnabled && globalCustomBg.exists() && globalCustomBg.length() > 0) {
-            binding.ambientBackground.setCustomBackgroundImage(Uri.fromFile(globalCustomBg))
-        } else {
-            binding.ambientBackground.setCustomBackgroundImage(null)
         }
     }
 

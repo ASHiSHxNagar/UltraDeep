@@ -30,4 +30,16 @@ interface PlaylistDao {
 
     @Query("SELECT COUNT(*) FROM playlist_songs WHERE playlistId = :playlistId")
     fun getSongCount(playlistId: Long): Flow<Int>
+
+    @Query("SELECT * FROM playlists")
+    suspend fun getAllPlaylistsSync(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM playlist_songs")
+    suspend fun getAllPlaylistSongsSync(): List<PlaylistSongCrossRef>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllPlaylists(playlists: List<PlaylistEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllPlaylistSongs(crossRefs: List<PlaylistSongCrossRef>)
 }

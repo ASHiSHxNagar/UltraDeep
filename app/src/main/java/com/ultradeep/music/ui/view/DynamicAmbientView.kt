@@ -8,11 +8,8 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
-import android.net.Uri
 import android.util.AttributeSet
 import android.widget.FrameLayout
-import android.widget.ImageView
-import com.ultradeep.music.R
 import com.ultradeep.music.util.AmbientGradientColors
 
 class DynamicAmbientView @JvmOverloads constructor(
@@ -23,27 +20,19 @@ class DynamicAmbientView @JvmOverloads constructor(
 
     private val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#9908080C")
+        color = Color.parseColor("#E6050508") // Pure deep AMOLED black scrim
     }
 
-    private var currentTopColor = Color.parseColor("#3D1263")
-    private var currentCenterColor = Color.parseColor("#140826")
-    private var currentBottomColor = Color.parseColor("#08080C")
+    private var currentTopColor = Color.parseColor("#2A0845")
+    private var currentCenterColor = Color.parseColor("#12061D")
+    private var currentBottomColor = Color.parseColor("#060609")
 
     private var colorAnimator: ValueAnimator? = null
     private val argbEvaluator = ArgbEvaluator()
 
-    private val customBackgroundImageView: ImageView
-
     init {
         setWillNotDraw(false)
-
-        customBackgroundImageView = ImageView(context).apply {
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            alpha = 0.35f
-        }
-        addView(customBackgroundImageView)
+        setBackgroundColor(Color.parseColor("#060609"))
     }
 
     fun setAmbientColors(colors: AmbientGradientColors, animate: Boolean = true) {
@@ -62,7 +51,7 @@ class DynamicAmbientView @JvmOverloads constructor(
         val startBottom = currentBottomColor
 
         colorAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 600
+            duration = 700
             addUpdateListener { animator ->
                 val fraction = animator.animatedFraction
                 currentTopColor = argbEvaluator.evaluate(fraction, startTop, colors.topColor) as Int
@@ -72,16 +61,6 @@ class DynamicAmbientView @JvmOverloads constructor(
                 invalidate()
             }
             start()
-        }
-    }
-
-    fun setCustomBackgroundImage(uri: Uri?) {
-        if (uri != null) {
-            customBackgroundImageView.visibility = VISIBLE
-            customBackgroundImageView.setImageURI(uri)
-        } else {
-            customBackgroundImageView.visibility = GONE
-            customBackgroundImageView.setImageDrawable(null)
         }
     }
 
@@ -95,7 +74,7 @@ class DynamicAmbientView @JvmOverloads constructor(
         gradientPaint.shader = LinearGradient(
             0f, 0f, 0f, height.toFloat(),
             intArrayOf(currentTopColor, currentCenterColor, currentBottomColor),
-            floatArrayOf(0f, 0.45f, 1f),
+            floatArrayOf(0f, 0.40f, 1f),
             Shader.TileMode.CLAMP
         )
     }
@@ -103,7 +82,6 @@ class DynamicAmbientView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), gradientPaint)
         super.onDraw(canvas)
-        // Scrim overlay to ensure high readability of text and controls
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrimPaint)
     }
 }

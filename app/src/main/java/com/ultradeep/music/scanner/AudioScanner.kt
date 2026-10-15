@@ -61,6 +61,10 @@ object AudioScanner {
                     val cleanArtist = if (rawArtist.equals("<unknown>", ignoreCase = true)) "Unknown Artist" else rawArtist
                     val cleanAlbum = if (rawAlbum.equals("<unknown>", ignoreCase = true)) "Unknown Album" else rawAlbum
 
+                    val sanitized = com.ultradeep.music.util.TrackNameSanitizer.sanitize(rawTitle, cleanArtist)
+                    val finalTitle = if (cleanArtist.equals("Unknown Artist", ignoreCase = true) && sanitized.artist != "Unknown Artist") sanitized.title else rawTitle
+                    val finalArtist = if (cleanArtist.equals("Unknown Artist", ignoreCase = true) && sanitized.artist != "Unknown Artist") sanitized.artist else cleanArtist
+
                     val contentUri = ContentUris.withAppendedId(
                         MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                         id
@@ -75,8 +79,8 @@ object AudioScanner {
                     songList.add(
                         Song(
                             id = id,
-                            title = rawTitle,
-                            artist = cleanArtist,
+                            title = finalTitle,
+                            artist = finalArtist,
                             album = cleanAlbum,
                             duration = duration,
                             contentUri = contentUri,
