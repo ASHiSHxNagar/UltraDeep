@@ -85,7 +85,6 @@ object BackupManager {
             val obj = JSONObject()
             obj.put("playlistId", ps.playlistId)
             obj.put("songId", ps.songId)
-            obj.put("addedAt", ps.addedAt)
             obj.put("orderIndex", ps.orderIndex)
             playlistSongsArray.put(obj)
         }
@@ -236,7 +235,6 @@ object BackupManager {
                     PlaylistSongCrossRef(
                         playlistId = obj.getLong("playlistId"),
                         songId = obj.getLong("songId"),
-                        addedAt = obj.optLong("addedAt", System.currentTimeMillis()),
                         orderIndex = obj.optInt("orderIndex", i)
                     )
                 )

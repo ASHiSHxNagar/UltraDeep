@@ -208,11 +208,11 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         // Gesture detector for Artwork view: swipe left triggers lyrics
         val artworkGestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float): Boolean {
-                if (e1 == null || e2 == null) return false
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                if (e1 == null) return false
                 val diffX = e1.x - e2.x
                 val diffY = e1.y - e2.y
-                if (Math.abs(diffX) > Math.abs(diffY) && diffX > swipeThreshold && Math.abs(velocityX) > swipeVelocityThreshold) {
+                if (kotlin.math.abs(diffX) > kotlin.math.abs(diffY) && diffX > swipeThreshold && kotlin.math.abs(velocityX) > swipeVelocityThreshold) {
                     toggleLyricsMode(true)
                     return true
                 }
@@ -222,11 +222,11 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         // Gesture detector for Lyrics view: swipe right triggers artwork
         val lyricsGestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float): Boolean {
-                if (e1 == null || e2 == null) return false
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                if (e1 == null) return false
                 val diffX = e2.x - e1.x
                 val diffY = e2.y - e1.y
-                if (Math.abs(diffX) > Math.abs(diffY) && diffX > swipeThreshold && Math.abs(velocityX) > swipeVelocityThreshold) {
+                if (kotlin.math.abs(diffX) > kotlin.math.abs(diffY) && diffX > swipeThreshold && kotlin.math.abs(velocityX) > swipeVelocityThreshold) {
                     toggleLyricsMode(false)
                     return true
                 }
@@ -399,7 +399,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             MusicController.duration.collectLatest { durationMs ->
-                binding.tvTotalTime.text = formatTime(durationMs)
+                binding.tvTotalDuration.text = formatTime(durationMs)
             }
         }
 
@@ -423,7 +423,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            MusicController.shuffleMode.collectLatest { shuffleOn ->
+            MusicController.isShuffle.collectLatest { shuffleOn ->
                 binding.btnShuffle.alpha = if (shuffleOn) 1.0f else 0.5f
             }
         }
