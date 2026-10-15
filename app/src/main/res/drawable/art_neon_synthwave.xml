@@ -1,0 +1,34 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <path
+        android:pathData="M0,0h200v200h-200z"
+        android:fillColor="#0D061C" />
+    <!-- Gradient Circle Sun -->
+    <path
+        android:pathData="M100,50m-45,0a45,45 0 1,0 90,0a45,45 0 1,0 -90,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="100"
+                android:startY="5"
+                android:endX="100"
+                android:endY="95"
+                android:type="linear">
+                <item android:color="#FF007F" android:offset="0.0" />
+                <item android:color="#7928CA" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Equalizer Grid Horizon -->
+    <path
+        android:pathData="M10,120 L190,120 M20,135 L180,135 M30,150 L170,150 M40,165 L160,165 M50,180 L150,180"
+        android:strokeColor="#00F5D4"
+        android:strokeWidth="1.5" />
+    <path
+        android:pathData="M100,100 L40,195 M100,100 L70,195 M100,100 L100,195 M100,100 L130,195 M100,100 L160,195"
+        android:strokeColor="#5900F5D4"
+        android:strokeWidth="1.2" />
+</vector>

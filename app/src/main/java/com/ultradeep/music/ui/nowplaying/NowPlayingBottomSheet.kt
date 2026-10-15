@@ -2,14 +2,16 @@ package com.ultradeep.music.ui.nowplaying
 
 import android.app.Dialog
 import android.content.Context
-import android.graphics.Color
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.SeekBar
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
@@ -19,6 +21,7 @@ import coil.load
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ultradeep.music.R
 import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.data.db.entity.FavoriteSongEntity
@@ -27,6 +30,7 @@ import com.ultradeep.music.databinding.DialogNowPlayingBinding
 import com.ultradeep.music.service.MusicController
 import com.ultradeep.music.ui.adapter.LyricsAdapter
 import com.ultradeep.music.ui.lyrics.EditLyricsBottomSheet
+import com.ultradeep.music.util.ArtworkManager
 import com.ultradeep.music.util.PaletteUtil
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -42,6 +46,11 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     private var isUserTrackingSeekBar = false
     private var currentSongId: Long = -1L
     private var rawLyricsCache: String = ""
+    private var currentSongOffsetMs: Long = 0L
+
+    private val prefs: SharedPreferences by lazy {
+        requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
+    }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val dialog = super.onCreateDialog(savedInstanceState) as BottomSheetDialog
@@ -78,7 +87,8 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
     private fun setupLyricsRecyclerView() {
         lyricsAdapter = LyricsAdapter { timestampMs ->
-            MusicController.seekTo(timestampMs)
+            val seekTarget = (timestampMs - currentSongOffsetMs).coerceAtLeast(0L)
+            MusicController.seekTo(seekTarget)
         }
 
         binding.rvLyrics.apply {
@@ -95,6 +105,11 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     private fun setupListeners() {
         binding.btnCollapse.setOnClickListener {
             dismiss()
+        }
+
+        binding.btnQueue.setOnClickListener {
+            val queueSheet = QueueBottomSheet()
+            queueSheet.show(parentFragmentManager, QueueBottomSheet.TAG)
         }
 
         binding.btnPlayPause.setOnClickListener {
@@ -124,7 +139,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         binding.btnEditLyrics.setOnClickListener {
             val currentSong = MusicController.currentSong.value ?: return@setOnClickListener
             val editDialog = EditLyricsBottomSheet(currentSong, rawLyricsCache) {
-                // Refresh lyrics after update
+                // Refresh lyrics immediately after edit
                 loadLyricsForSong(currentSong, forceRefresh = true)
             }
             editDialog.show(parentFragmentManager, EditLyricsBottomSheet.TAG)
@@ -133,6 +148,23 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         binding.btnFavorite.setOnClickListener {
             val song = MusicController.currentSong.value ?: return@setOnClickListener
             toggleFavorite(song)
+        }
+
+        // Lyrics Sync Offset Listeners
+        binding.btnOffsetMinus.setOnClickListener {
+            adjustSyncOffset(-500L)
+        }
+
+        binding.btnOffsetPlus.setOnClickListener {
+            adjustSyncOffset(500L)
+        }
+
+        binding.btnOffsetReset.setOnClickListener {
+            setSyncOffset(0L)
+        }
+
+        binding.tvCurrentOffset.setOnClickListener {
+            showCustomOffsetInputDialog()
         }
 
         binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -156,6 +188,44 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                 MusicController.seekTo(targetMs)
             }
         })
+    }
+
+    private fun adjustSyncOffset(deltaMs: Long) {
+        setSyncOffset(currentSongOffsetMs + deltaMs)
+    }
+
+    private fun setSyncOffset(newOffsetMs: Long) {
+        currentSongOffsetMs = newOffsetMs
+        if (currentSongId != -1L) {
+            prefs.edit().putLong("lyrics_offset_$currentSongId", currentSongOffsetMs).apply()
+        }
+        updateOffsetUI()
+        lyricsAdapter.updatePosition(MusicController.currentPosition.value, binding.rvLyrics, currentSongOffsetMs)
+    }
+
+    private fun updateOffsetUI() {
+        val seconds = currentSongOffsetMs / 1000f
+        binding.tvCurrentOffset.text = String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
+    }
+
+    private fun showCustomOffsetInputDialog() {
+        val input = EditText(requireContext()).apply {
+            hint = "e.g. 0.5 or -2.0 or 5.0"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+            setText(String.format(Locale.getDefault(), "%.1f", currentSongOffsetMs / 1000f))
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Set Lyrics Delay Timer")
+            .setMessage("Enter seconds to advance (+) or delay (-) the synchronized lyrics for this song:")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val sec = input.text.toString().toDoubleOrNull() ?: 0.0
+                setSyncOffset((sec * 1000).toLong())
+                Toast.makeText(requireContext(), "Lyrics offset saved permanently!", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun toggleLyricsMode(showLyrics: Boolean) {
@@ -200,7 +270,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                     }
                     binding.tvCurrentTime.text = formatTime(posMs)
                 }
-                lyricsAdapter.updatePosition(posMs, binding.rvLyrics)
+                lyricsAdapter.updatePosition(posMs, binding.rvLyrics, currentSongOffsetMs)
             }
         }
 
@@ -236,15 +306,21 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun updateSongUI(song: Song) {
-        if (song.id == currentSongId) return
+        val isNewSong = song.id != currentSongId
         currentSongId = song.id
+
+        if (isNewSong) {
+            currentSongOffsetMs = prefs.getLong("lyrics_offset_${song.id}", 0L)
+            updateOffsetUI()
+        }
 
         binding.tvTitle.text = song.title
         binding.tvTitle.isSelected = true // Enable marquee scrolling
         binding.tvArtist.text = song.artist
 
-        // Load album art with Coil
-        binding.ivAlbumArt.load(song.albumArtUri) {
+        // Load album art via ArtworkManager
+        val art = ArtworkManager.getArtworkForSong(requireContext(), song)
+        binding.ivAlbumArt.load(art) {
             crossfade(true)
             placeholder(R.drawable.bg_artwork_placeholder)
             error(R.drawable.bg_artwork_placeholder)
@@ -252,9 +328,13 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         // Extract palette ambient colors
         viewLifecycleOwner.lifecycleScope.launch {
-            val colors = PaletteUtil.extractColorsFromUri(requireContext(), song.albumArtUri)
+            val artUri = if (art is Uri) art.toString() else song.albumArtUri
+            val colors = PaletteUtil.extractColorsFromUri(requireContext(), artUri)
             binding.ambientBackground.setAmbientColors(colors)
         }
+
+        // Check custom background
+        checkCustomBackground()
 
         // Observe favorite state
         val favoriteDao = UltraDeepApplication.instance.database.favoriteDao()
@@ -294,6 +374,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             } else {
                 binding.tvLyricsStatus.visibility = View.GONE
                 lyricsAdapter.submitLines(result.lines)
+                lyricsAdapter.updatePosition(MusicController.currentPosition.value, binding.rvLyrics, currentSongOffsetMs)
             }
         }
     }
@@ -311,16 +392,20 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun checkCustomBackground() {
-        val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
-        val isCustomEnabled = prefs.getBoolean("custom_ambient_enabled", false)
-        val customUriString = prefs.getString("custom_ambient_uri", null)
-
-        if (isCustomEnabled && !customUriString.isNullOrEmpty()) {
-            try {
-                binding.ambientBackground.setCustomBackgroundImage(Uri.parse(customUriString))
-            } catch (e: Exception) {
-                e.printStackTrace()
+        val currentSong = MusicController.currentSong.value
+        if (currentSong != null) {
+            val customSongArt = ArtworkManager.getCustomArtworkFile(requireContext(), currentSong.id)
+            if (customSongArt.exists() && customSongArt.length() > 0) {
+                binding.ambientBackground.setCustomBackgroundImage(Uri.fromFile(customSongArt))
+                return
             }
+        }
+
+        val isCustomEnabled = prefs.getBoolean("custom_ambient_enabled", false)
+        val globalCustomBg = ArtworkManager.getGlobalCustomBgFile(requireContext())
+
+        if (isCustomEnabled && globalCustomBg.exists() && globalCustomBg.length() > 0) {
+            binding.ambientBackground.setCustomBackgroundImage(Uri.fromFile(globalCustomBg))
         } else {
             binding.ambientBackground.setCustomBackgroundImage(null)
         }

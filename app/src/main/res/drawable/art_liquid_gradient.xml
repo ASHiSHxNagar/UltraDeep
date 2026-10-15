@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <path
+        android:pathData="M0,0h200v200h-200z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="200"
+                android:endY="200"
+                android:type="linear">
+                <item android:color="#0077B6" android:offset="0.0" />
+                <item android:color="#7209B7" android:offset="0.5" />
+                <item android:color="#F72585" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Organic Liquid Blob -->
+    <path
+        android:pathData="M100,50 C140,40 170,80 150,120 C130,160 70,170 50,130 C30,90 60,60 100,50 Z"
+        android:fillColor="#4D00F5D4" />
+</vector>

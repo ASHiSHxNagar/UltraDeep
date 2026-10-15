@@ -11,6 +11,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.ultradeep.music.data.model.Song
+import com.ultradeep.music.util.ArtworkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,6 +28,7 @@ object MusicController {
     private var mediaController: MediaController? = null
     private val scope = CoroutineScope(Dispatchers.Main)
     private var progressJob: Job? = null
+    private var appContext: Context? = null
 
     // Library & Queue State
     private val _allSongs = MutableStateFlow<List<Song>>(emptyList())
@@ -58,6 +60,7 @@ object MusicController {
 
     fun init(context: Context) {
         if (controllerFuture != null) return
+        appContext = context.applicationContext
 
         val sessionToken = SessionToken(
             context,
@@ -85,6 +88,7 @@ object MusicController {
                     startProgressTracker()
                 } else {
                     stopProgressTracker()
+                    persistLastPosition()
                 }
             }
 
@@ -113,12 +117,17 @@ object MusicController {
     private fun startProgressTracker() {
         stopProgressTracker()
         progressJob = scope.launch {
+            var counter = 0
             while (isActive) {
                 mediaController?.let { player ->
                     _currentPosition.value = player.currentPosition.coerceAtLeast(0L)
                     _duration.value = player.duration.coerceAtLeast(0L)
                 }
-                delay(100) // 100ms for ultra-smooth real-time lyric scrolling
+                counter++
+                if (counter % 30 == 0) { // Every ~3 seconds persist position
+                    persistLastPosition()
+                }
+                delay(100) // 100ms for smooth lyric synchronization
             }
         }
     }
@@ -126,6 +135,27 @@ object MusicController {
     private fun stopProgressTracker() {
         progressJob?.cancel()
         progressJob = null
+    }
+
+    private fun persistLastPosition() {
+        val song = _currentSong.value ?: return
+        val pos = _currentPosition.value
+        appContext?.getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)?.edit()
+            ?.putLong("last_played_song_id", song.id)
+            ?.putLong("last_played_song_pos", pos)
+            ?.apply()
+    }
+
+    fun restoreLastPlayedSong(song: Song) {
+        if (_currentSong.value != null) return
+        _currentSong.value = song
+        _duration.value = song.duration
+        val prefs = appContext?.getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
+        val lastPos = prefs?.getLong("last_played_song_pos", 0L) ?: 0L
+        _currentPosition.value = lastPos
+        if (_queue.value.isEmpty()) {
+            _queue.value = listOf(song)
+        }
     }
 
     fun updateLibrary(songs: List<Song>) {
@@ -142,11 +172,23 @@ object MusicController {
         _currentIndex.value = if (index >= 0) index else 0
         _currentSong.value = song
 
+        // Save last played song id to SharedPreferences
+        appContext?.getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)?.edit()
+            ?.putLong("last_played_song_id", song.id)
+            ?.apply()
+
+        // Resolve artwork
+        val customArt = appContext?.let { ArtworkManager.getArtworkForSong(it, song) }
+        val artworkUri = when (customArt) {
+            is Uri -> customArt
+            else -> song.albumArtUri?.let { Uri.parse(it) }
+        }
+
         val mediaMetadata = MediaMetadata.Builder()
             .setTitle(song.title)
             .setArtist(song.artist)
             .setAlbumTitle(song.album)
-            .setArtworkUri(song.albumArtUri?.let { Uri.parse(it) })
+            .setArtworkUri(artworkUri)
             .build()
 
         val mediaItem = MediaItem.Builder()

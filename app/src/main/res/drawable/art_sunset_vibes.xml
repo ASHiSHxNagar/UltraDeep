@@ -1,0 +1,29 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <path
+        android:pathData="M0,0h200v200h-200z"
+        android:fillColor="#150811" />
+    <path
+        android:pathData="M100,80m-50,0a50,50 0 1,0 100,0a50,50 0 1,0 -100,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="100"
+                android:startY="30"
+                android:endX="100"
+                android:endY="130"
+                android:type="linear">
+                <item android:color="#FF7B00" android:offset="0.0" />
+                <item android:color="#E01E37" android:offset="0.5" />
+                <item android:color="#6F2DBD" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Mountain Horizon Silhouette -->
+    <path
+        android:pathData="M0,200 L40,140 L90,170 L140,130 L200,200 Z"
+        android:fillColor="#0D040A" />
+</vector>

@@ -1,0 +1,29 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <path
+        android:pathData="M0,0h200v200h-200z"
+        android:fillColor="#08080C" />
+    <!-- Nebula Dust Glow -->
+    <path
+        android:pathData="M100,100m-75,0a75,75 0 1,0 150,0a75,75 0 1,0 -150,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="100"
+                android:centerY="100"
+                android:gradientRadius="75"
+                android:type="radial">
+                <item android:color="#7A480CA8" android:offset="0.0" />
+                <item android:color="#3D3F37C9" android:offset="0.5" />
+                <item android:color="#0008080C" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Stars -->
+    <path
+        android:pathData="M40,50h2v2h-2z M160,60h2v2h-2z M80,150h2v2h-2z M150,140h3v3h-3z M60,110h2v2h-2z M120,40h3v3h-3z M100,165h2v2h-2z"
+        android:fillColor="#FFFFFF" />
+</vector>

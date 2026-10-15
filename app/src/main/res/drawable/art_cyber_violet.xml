@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <path
+        android:pathData="M0,0h200v200h-200z"
+        android:fillColor="#0A0717" />
+    <!-- Concentric Cyber Rings -->
+    <path
+        android:pathData="M100,100m-70,0a70,70 0 1,0 140,0a70,70 0 1,0 -140,0"
+        android:strokeWidth="3">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="30"
+                android:startY="30"
+                android:endX="170"
+                android:endY="170"
+                android:type="linear">
+                <item android:color="#7928CA" android:offset="0.0" />
+                <item android:color="#F72585" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M100,100m-48,0a48,48 0 1,0 96,0a48,48 0 1,0 -96,0"
+        android:strokeColor="#9D4EDD"
+        android:strokeWidth="2.5" />
+    <path
+        android:pathData="M100,100m-26,0a26,26 0 1,0 52,0a26,26 0 1,0 -52,0"
+        android:fillColor="#E0AAFF" />
+</vector>

@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <path
+        android:pathData="M0,0h200v200h-200z"
+        android:fillColor="#120A1A" />
+    <!-- Crescent Moon -->
+    <path
+        android:pathData="M130,40 A35,35 0 1,0 160,85 A28,28 0 1,1 130,40 Z"
+        android:fillColor="#FFE66D" />
+    <!-- Clouds -->
+    <path
+        android:pathData="M30,130 Q50,110 80,125 Q110,105 140,125 Q160,115 180,130 L180,150 L30,150 Z"
+        android:fillColor="#3D7928CA" />
+    <path
+        android:pathData="M10,145 Q40,135 70,145 Q110,130 150,145 Q180,135 195,145 L195,170 L10,170 Z"
+        android:fillColor="#24F72585" />
+</vector>

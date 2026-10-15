@@ -105,6 +105,18 @@ class MainActivity : AppCompatActivity() {
             allTracks = songs
             MusicController.updateLibrary(songs)
             applyFilterAndSort()
+
+            // Restore last played song so it appears in the bottom mini-player
+            if (MusicController.currentSong.value == null) {
+                val prefs = getSharedPreferences("ultradeep_prefs", android.content.Context.MODE_PRIVATE)
+                val lastId = prefs.getLong("last_played_song_id", -1L)
+                if (lastId != -1L) {
+                    val lastSong = songs.firstOrNull { it.id == lastId }
+                    if (lastSong != null) {
+                        MusicController.restoreLastPlayedSong(lastSong)
+                    }
+                }
+            }
         }
     }
 
@@ -112,6 +124,8 @@ class MainActivity : AppCompatActivity() {
         songAdapter = SongAdapter(
             onSongClicked = { song, queue ->
                 MusicController.playSong(song, queue)
+                val nowPlayingSheet = NowPlayingBottomSheet()
+                nowPlayingSheet.show(supportFragmentManager, NowPlayingBottomSheet.TAG)
             },
             onSongMoreClicked = { song ->
                 showSongOptionsBottomSheet(song)
@@ -251,7 +265,8 @@ class MainActivity : AppCompatActivity() {
                     mini.tvMiniTitle.isSelected = true
                     mini.tvMiniArtist.text = song.artist
 
-                    mini.ivMiniThumbnail.load(song.albumArtUri) {
+                    val art = com.ultradeep.music.util.ArtworkManager.getArtworkForSong(this@MainActivity, song)
+                    mini.ivMiniThumbnail.load(art) {
                         crossfade(true)
                         placeholder(R.drawable.bg_artwork_placeholder)
                         error(R.drawable.bg_artwork_placeholder)
@@ -377,7 +392,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSongOptionsBottomSheet(song: Song) {
-        val addToSheet = AddToPlaylistBottomSheet(song)
-        addToSheet.show(supportFragmentManager, AddToPlaylistBottomSheet.TAG)
+        val optionsSheet = com.ultradeep.music.ui.options.SongOptionsBottomSheet(song) {
+            applyFilterAndSort()
+        }
+        optionsSheet.show(supportFragmentManager, com.ultradeep.music.ui.options.SongOptionsBottomSheet.TAG)
     }
 }

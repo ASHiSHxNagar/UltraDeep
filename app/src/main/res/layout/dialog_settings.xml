@@ -24,7 +24,110 @@
         android:textColor="@color/text_primary"
         android:textSize="20sp" />
 
-    <!-- Storage Scanning Section -->
+    <!-- 1. Theme Mode Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="THEME &amp; APPEARANCE"
+        android:textColor="@color/neon_cyan"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <RadioGroup
+        android:id="@+id/rgThemeMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_card_rounded"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <RadioButton
+            android:id="@+id/rbThemeDark"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="AMOLED Dark Mode (Recommended)"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp" />
+
+        <RadioButton
+            android:id="@+id/rbThemeLight"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Modern Light Mode"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp" />
+
+        <RadioButton
+            android:id="@+id/rbThemeSystem"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Follow System Default"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp" />
+    </RadioGroup>
+
+    <!-- 2. Custom Background & Generative Artworks Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="NOW PLAYING BACKGROUND"
+        android:textColor="@color/neon_cyan"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_card_rounded"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tvCustomBgStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Active: 10 Generative AI Artworks &amp; Dynamic Ambient"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Set a global image/wallpaper from device storage, or use curated artworks"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPickCustomBg"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/choose_custom_bg"
+            android:textColor="@color/neon_cyan"
+            app:backgroundTint="@color/surface_dark"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_album"
+            app:iconTint="@color/neon_cyan" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClearCustomBg"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Reset to 10 AI Artworks &amp; Ambient"
+            android:textColor="@color/text_secondary" />
+    </LinearLayout>
+
+    <!-- 3. Storage Scanning Section -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -78,62 +181,6 @@
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
         </LinearLayout>
-    </LinearLayout>
-
-    <!-- Now Playing Ambient Background Section -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="NOW PLAYING AMBIENCE"
-        android:textColor="@color/neon_cyan"
-        android:textSize="12sp"
-        android:textStyle="bold" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="@drawable/bg_card_rounded"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/switchCustomAmbient"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/ambient_mode_custom"
-            android:textColor="@color/text_primary"
-            android:textSize="15sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="Toggle between dynamic album art colors and a custom image background"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnPickCustomBg"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/choose_custom_bg"
-            android:textColor="@color/neon_cyan"
-            app:backgroundTint="@color/surface_dark"
-            app:cornerRadius="12dp"
-            app:icon="@drawable/ic_album"
-            app:iconTint="@color/neon_cyan" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnClearCustomBg"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/clear_custom_bg"
-            android:textColor="@color/text_secondary" />
     </LinearLayout>
 
 </LinearLayout>

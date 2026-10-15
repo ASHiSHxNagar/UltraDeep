@@ -8,13 +8,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.ultradeep.music.R
-import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.databinding.DialogSettingsBinding
 import com.ultradeep.music.scanner.AudioScanner
 import com.ultradeep.music.service.MusicController
+import com.ultradeep.music.util.ArtworkManager
+import com.ultradeep.music.util.FileUtil
 import kotlinx.coroutines.launch
 
 class SettingsBottomSheet(
@@ -26,14 +28,16 @@ class SettingsBottomSheet(
 
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
-            prefs.edit()
-                .putString("custom_ambient_uri", uri.toString())
-                .putBoolean("custom_ambient_enabled", true)
-                .apply()
-
-            binding.switchCustomAmbient.isChecked = true
-            Toast.makeText(requireContext(), "Custom background set", Toast.LENGTH_SHORT).show()
+            val dest = ArtworkManager.getGlobalCustomBgFile(requireContext())
+            val success = FileUtil.copyUriToFile(requireContext(), uri, dest)
+            if (success) {
+                val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("custom_ambient_enabled", true).apply()
+                updateBackgroundStatus()
+                Toast.makeText(requireContext(), "Custom background image saved!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(requireContext(), "Failed to save image", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -50,24 +54,37 @@ class SettingsBottomSheet(
         super.onViewCreated(view, savedInstanceState)
 
         val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
-        val isCustomEnabled = prefs.getBoolean("custom_ambient_enabled", false)
-        binding.switchCustomAmbient.isChecked = isCustomEnabled
 
-        binding.switchCustomAmbient.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("custom_ambient_enabled", isChecked).apply()
+        // Setup Theme selection
+        val themeMode = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_YES)
+        when (themeMode) {
+            AppCompatDelegate.MODE_NIGHT_NO -> binding.rbThemeLight.isChecked = true
+            AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM -> binding.rbThemeSystem.isChecked = true
+            else -> binding.rbThemeDark.isChecked = true
         }
+
+        binding.rgThemeMode.setOnCheckedChangeListener { _, checkedId ->
+            val mode = when (checkedId) {
+                R.id.rbThemeLight -> AppCompatDelegate.MODE_NIGHT_NO
+                R.id.rbThemeSystem -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                else -> AppCompatDelegate.MODE_NIGHT_YES
+            }
+            prefs.edit().putInt("theme_mode", mode).apply()
+            AppCompatDelegate.setDefaultNightMode(mode)
+        }
+
+        updateBackgroundStatus()
 
         binding.btnPickCustomBg.setOnClickListener {
             pickImageLauncher.launch("image/*")
         }
 
         binding.btnClearCustomBg.setOnClickListener {
-            prefs.edit()
-                .remove("custom_ambient_uri")
-                .putBoolean("custom_ambient_enabled", false)
-                .apply()
-            binding.switchCustomAmbient.isChecked = false
-            Toast.makeText(requireContext(), R.string.clear_custom_bg, Toast.LENGTH_SHORT).show()
+            val file = ArtworkManager.getGlobalCustomBgFile(requireContext())
+            if (file.exists()) file.delete()
+            prefs.edit().putBoolean("custom_ambient_enabled", false).apply()
+            updateBackgroundStatus()
+            Toast.makeText(requireContext(), "Reverted to 10 generative artworks", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnRescanStorage.setOnClickListener {
@@ -82,6 +99,20 @@ class SettingsBottomSheet(
                 Toast.makeText(requireContext(), "${songs.size} tracks found", Toast.LENGTH_SHORT).show()
                 onLibraryRescanned()
             }
+        }
+    }
+
+    private fun updateBackgroundStatus() {
+        val file = ArtworkManager.getGlobalCustomBgFile(requireContext())
+        val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
+        val isEnabled = prefs.getBoolean("custom_ambient_enabled", false)
+
+        if (isEnabled && file.exists() && file.length() > 0) {
+            binding.tvCustomBgStatus.text = "Active: Global Custom Wallpaper"
+            binding.tvCustomBgStatus.setTextColor(requireContext().getColor(R.color.neon_cyan))
+        } else {
+            binding.tvCustomBgStatus.text = "Active: 10 Generative AI Artworks & Dynamic Ambient"
+            binding.tvCustomBgStatus.setTextColor(requireContext().getColor(R.color.text_primary))
         }
     }
 

@@ -86,7 +86,8 @@ class SongAdapter(
                 vActiveIndicator.visibility = View.GONE
             }
 
-            ivThumbnail.load(song.albumArtUri) {
+            val art = com.ultradeep.music.util.ArtworkManager.getArtworkForSong(context, song)
+            ivThumbnail.load(art) {
                 crossfade(true)
                 placeholder(R.drawable.bg_artwork_placeholder)
                 error(R.drawable.bg_artwork_placeholder)

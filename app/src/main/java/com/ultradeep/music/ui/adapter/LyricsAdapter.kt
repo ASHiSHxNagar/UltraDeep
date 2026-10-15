@@ -30,14 +30,15 @@ class LyricsAdapter(
         notifyDataSetChanged()
     }
 
-    fun updatePosition(currentPositionMs: Long, recyclerView: RecyclerView) {
+    fun updatePosition(currentPositionMs: Long, recyclerView: RecyclerView, offsetMs: Long = 0L) {
         if (lines.isEmpty()) return
 
+        val effectivePos = (currentPositionMs + offsetMs).coerceAtLeast(0L)
         var newIndex = -1
         for (i in lines.indices) {
             val line = lines[i]
             val nextLine = lines.getOrNull(i + 1)
-            if (line.timestampMs <= currentPositionMs && (nextLine == null || nextLine.timestampMs > currentPositionMs)) {
+            if (line.timestampMs <= effectivePos && (nextLine == null || nextLine.timestampMs > effectivePos)) {
                 newIndex = i
                 break
             }
@@ -113,15 +114,17 @@ class LyricsAdapter(
         fun bind(line: LyricLine, isActive: Boolean) {
             tvLine.text = line.text
             if (isActive) {
-                tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.neon_cyan))
-                tvLine.textSize = 21f
-                tvLine.setTypeface(null, Typeface.BOLD)
+                // Spotify Active Lyric: High-contrast pure white, bold sans-serif, larger font
+                tvLine.setTextColor(Color.WHITE)
+                tvLine.textSize = 24f
+                tvLine.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD))
                 tvLine.alpha = 1.0f
             } else {
-                tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_inactive_lyric))
-                tvLine.textSize = 17f
-                tvLine.setTypeface(null, Typeface.NORMAL)
-                tvLine.alpha = 0.55f
+                // Spotify Inactive Lyric: Muted slate-cyan, semi-bold
+                tvLine.setTextColor(Color.parseColor("#7D9B9B"))
+                tvLine.textSize = 18f
+                tvLine.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+                tvLine.alpha = 0.65f
             }
         }
     }

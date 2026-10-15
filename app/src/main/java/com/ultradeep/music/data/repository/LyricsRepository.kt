@@ -13,21 +13,22 @@ import okhttp3.Request
 class LyricsRepository(private val lyricsDao: LyricsDao) {
 
     suspend fun getLyrics(song: Song, forceRefresh: Boolean = false): LrcResult = withContext(Dispatchers.IO) {
-        if (!forceRefresh) {
-            // Check Room DB cache first
-            val cached = lyricsDao.getLyricsForSong(song.id)
-            if (cached != null) {
-                if (cached.isInstrumental) {
-                    return@withContext LrcResult(
-                        lines = emptyList(),
-                        isSynced = false,
-                        plainText = "",
-                        isCustom = cached.isCustom,
-                        isInstrumental = true
-                    )
-                }
-                return@withContext LrcParser.parse(cached.lrcContent, cached.isCustom)
+        val cached = lyricsDao.getLyricsForSong(song.id)
+        if (cached != null && cached.isCustom) {
+            return@withContext LrcParser.parse(cached.lrcContent, true)
+        }
+
+        if (!forceRefresh && cached != null) {
+            if (cached.isInstrumental) {
+                return@withContext LrcResult(
+                    lines = emptyList(),
+                    isSynced = false,
+                    plainText = "",
+                    isCustom = false,
+                    isInstrumental = true
+                )
             }
+            return@withContext LrcParser.parse(cached.lrcContent, false)
         }
 
         // Fetch from LRCLIB API
