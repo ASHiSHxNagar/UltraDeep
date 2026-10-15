@@ -29,6 +29,7 @@ import com.ultradeep.music.ui.playlist.AddToPlaylistBottomSheet
 import com.ultradeep.music.ui.playlist.CreatePlaylistDialog
 import com.ultradeep.music.ui.settings.SettingsBottomSheet
 import com.ultradeep.music.ui.view.AmbientCardAnimator
+import com.ultradeep.music.util.BackupManager
 import com.ultradeep.music.util.PaletteUtil
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -417,6 +418,13 @@ class MainActivity : AppCompatActivity() {
             applyFilterAndSort()
         }
         optionsSheet.show(supportFragmentManager, com.ultradeep.music.ui.options.SongOptionsBottomSheet.TAG)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        UltraDeepApplication.instance.applicationScope.launch {
+            BackupManager.updateAutoBackup(this@MainActivity)
+        }
     }
 
     override fun onDestroy() {

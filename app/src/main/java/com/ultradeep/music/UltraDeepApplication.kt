@@ -7,6 +7,7 @@ import com.ultradeep.music.data.repository.LyricsRepository
 import com.ultradeep.music.scanner.AudioScanner
 import com.ultradeep.music.scanner.MediaStoreContentObserver
 import com.ultradeep.music.service.MusicController
+import com.ultradeep.music.util.BackupManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,6 +36,11 @@ class UltraDeepApplication : Application() {
 
         // Setup MediaStore ContentObserver for auto-syncing newly added songs
         setupMediaStoreObserver()
+
+        // Refresh the user-selected backup file whenever a new app process opens.
+        applicationScope.launch {
+            BackupManager.updateAutoBackup(this@UltraDeepApplication)
+        }
     }
 
     private fun setupMediaStoreObserver() {

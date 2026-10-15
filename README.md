@@ -77,6 +77,13 @@ Because the repository includes a complete CI/CD workflow, you do not need Java 
    - Under **Artifacts**, download `UltraDeep-Debug-APK.zip`.
    - Extract and install `app-debug.apk` onto your Android device.
 
+### Updating the installed APK and keeping your data
+
+- Builds now use increasing Android version codes and reuse the same CI debug signing key, so APKs from later GitHub Actions runs can install as updates.
+- The first update from an older CI APK may still require one uninstall because its one-time signing key cannot be recovered. Before uninstalling, open the currently installed app and use **Settings → Backup & Restore → Export Backup**; save that JSON somewhere outside the app.
+- After installing the new APK, open **Settings → Backup & Restore → Choose automatic backup folder** and select a folder such as `Documents/UltraDeep`. The app refreshes `UltraDeep_AutoBackup.json` on launch and when it moves to the background.
+- Android clears the folder permission when an app is uninstalled. After reinstalling, select the same folder again; UltraDeep restores the saved data automatically when the new installation has no local data, then resumes automatic backups.
+
 ---
 
 ## 📄 License

@@ -99,6 +99,30 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
         }
     }
 
+    private val chooseAutoBackupFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+        if (uri != null) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                binding.btnChooseAutoBackupFolder.isEnabled = false
+                try {
+                    val result = BackupManager.selectAutoBackupFolder(requireContext(), uri)
+                    updateAutoBackupStatus()
+                    val message = result.restored?.let {
+                        "Recovered ${it.lyricsCount} lyrics, ${it.favoritesCount} favorites and ${it.playlistsCount} playlists."
+                    } ?: "Automatic backup folder saved."
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+                    if (!result.written) {
+                        binding.tvAutoBackupStatus.text = "Folder selected, but backup write failed. Choose a writable folder."
+                    }
+                } catch (error: Exception) {
+                    binding.tvAutoBackupStatus.text = "Could not use this folder: ${error.localizedMessage ?: "permission denied"}"
+                    Toast.makeText(requireContext(), "Could not access the selected folder", Toast.LENGTH_LONG).show()
+                } finally {
+                    binding.btnChooseAutoBackupFolder.isEnabled = true
+                }
+            }
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -112,6 +136,7 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
         super.onViewCreated(view, savedInstanceState)
 
         val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
+        updateAutoBackupStatus()
 
         // Setup Theme selection
         val themeMode = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_YES)
@@ -169,6 +194,54 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
             importBackupLauncher.launch("*/*")
         }
 
+        binding.btnChooseAutoBackupFolder.setOnClickListener {
+            chooseAutoBackupFolderLauncher.launch(null)
+        }
+
+        binding.btnBackupNow.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch {
+                binding.btnBackupNow.isEnabled = false
+                val saved = BackupManager.updateAutoBackup(requireContext())
+                binding.btnBackupNow.isEnabled = true
+                updateAutoBackupStatus()
+                Toast.makeText(
+                    requireContext(),
+                    if (saved) "Backup updated" else "Choose a writable backup folder first",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+        binding.btnRestoreAutoBackup.setOnClickListener {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Restore automatic backup?")
+                .setMessage("Saved lyrics, favorites, playlists and artwork will be merged into this installation.")
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton("Restore") { _, _ ->
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        binding.btnRestoreAutoBackup.isEnabled = false
+                        try {
+                            val restored = BackupManager.restoreSelectedAutoBackup(requireContext())
+                            if (restored == null) {
+                                Toast.makeText(requireContext(), "No automatic backup found in that folder", Toast.LENGTH_SHORT).show()
+                            } else {
+                                onLibraryRescanned?.invoke()
+                                Toast.makeText(
+                                    requireContext(),
+                                    "Restored ${restored.lyricsCount} lyrics, ${restored.favoritesCount} favorites, ${restored.playlistsCount} playlists.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        } catch (error: Exception) {
+                            Toast.makeText(requireContext(), "Backup restore failed: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                        } finally {
+                            binding.btnRestoreAutoBackup.isEnabled = true
+                        }
+                    }
+                }
+                .show()
+        }
+
         binding.btnSyncMissingLyrics.setOnClickListener {
             syncMissingLyrics()
         }
@@ -221,6 +294,14 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
         } else {
             binding.tvDefaultArtStatus.text = "Active: Car Default Photo"
             binding.tvDefaultArtStatus.setTextColor(requireContext().getColor(R.color.text_primary))
+        }
+    }
+
+    private fun updateAutoBackupStatus() {
+        binding.tvAutoBackupStatus.text = if (BackupManager.hasAutoBackupFolder(requireContext())) {
+            "Automatic backup is on. Choose this same folder again after reinstall to recover and resume backups."
+        } else {
+            "Choose a folder. Backups refresh when the app opens and goes to the background; select it again after reinstall."
         }
     }
 

@@ -2,6 +2,8 @@ package com.ultradeep.music.util
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Base64
 import androidx.core.content.FileProvider
 import com.ultradeep.music.UltraDeepApplication
@@ -10,6 +12,8 @@ import com.ultradeep.music.data.db.entity.LyricsEntity
 import com.ultradeep.music.data.db.entity.PlaylistEntity
 import com.ultradeep.music.data.db.entity.PlaylistSongCrossRef
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,6 +27,120 @@ data class RestoreSummary(
 )
 
 object BackupManager {
+
+    private const val AUTO_BACKUP_PREFS = "automatic_backup_prefs"
+    private const val AUTO_BACKUP_TREE_URI = "backup_tree_uri"
+    private const val AUTO_BACKUP_FILE_NAME = "UltraDeep_AutoBackup.json"
+    private val autoBackupMutex = Mutex()
+
+    data class AutoBackupSetupResult(val restored: RestoreSummary?, val written: Boolean)
+
+    fun hasAutoBackupFolder(context: Context): Boolean {
+        val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
+            .getString(AUTO_BACKUP_TREE_URI, null) ?: return false
+        val uri = Uri.parse(uriText)
+        return context.contentResolver.persistedUriPermissions.any {
+            it.uri == uri && it.isReadPermission && it.isWritePermission
+        }
+    }
+
+    /** Stores a durable SAF folder grant and recovers a backup if this is a clean install. */
+    suspend fun selectAutoBackupFolder(context: Context, treeUri: Uri): AutoBackupSetupResult = withContext(Dispatchers.IO) {
+        context.contentResolver.takePersistableUriPermission(
+            treeUri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        )
+        context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(AUTO_BACKUP_TREE_URI, treeUri.toString()).commit()
+
+        val existing = readAutoBackup(context, treeUri)
+        val restored = if (!existing.isNullOrBlank() && !hasLocalUserData(context)) {
+            restoreBackup(context, existing)
+        } else null
+        AutoBackupSetupResult(restored, updateAutoBackup(context))
+    }
+
+    /** Rewrites one stable JSON file; safe to invoke both at app launch and when leaving it. */
+    suspend fun updateAutoBackup(context: Context): Boolean = autoBackupMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
+                .getString(AUTO_BACKUP_TREE_URI, null) ?: return@withContext false
+            val treeUri = Uri.parse(uriText)
+            val hasPermission = context.contentResolver.persistedUriPermissions.any {
+                it.uri == treeUri && it.isReadPermission && it.isWritePermission
+            }
+            if (!hasPermission) return@withContext false
+            writeAutoBackup(context, treeUri)
+        }
+    }
+
+    suspend fun restoreSelectedAutoBackup(context: Context): RestoreSummary? = withContext(Dispatchers.IO) {
+        val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
+            .getString(AUTO_BACKUP_TREE_URI, null) ?: return@withContext null
+        val contents = readAutoBackup(context, Uri.parse(uriText)) ?: return@withContext null
+        restoreBackup(context, contents)
+    }
+
+    private suspend fun writeAutoBackup(context: Context, treeUri: Uri): Boolean {
+        return try {
+            val json = createBackupJson(context)
+            val documentUri = findAutoBackupDocument(context, treeUri, create = true) ?: return false
+            context.contentResolver.openOutputStream(documentUri, "wt")?.bufferedWriter()?.use { writer ->
+                writer.write(json)
+            } ?: return false
+            true
+        } catch (error: Exception) {
+            error.printStackTrace()
+            false
+        }
+    }
+
+    private fun readAutoBackup(context: Context, treeUri: Uri): String? {
+        return try {
+            val documentUri = findAutoBackupDocument(context, treeUri, create = false) ?: return null
+            context.contentResolver.openInputStream(documentUri)?.bufferedReader()?.use { it.readText() }
+        } catch (error: Exception) {
+            error.printStackTrace()
+            null
+        }
+    }
+
+    private fun findAutoBackupDocument(context: Context, treeUri: Uri, create: Boolean): Uri? {
+        val resolver = context.contentResolver
+        val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocumentId)
+        resolver.query(
+            childrenUri,
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val nameColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameColumn) == AUTO_BACKUP_FILE_NAME) {
+                    return DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idColumn))
+                }
+            }
+        }
+        if (!create) return null
+        val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocumentId)
+        return DocumentsContract.createDocument(resolver, parentUri, "application/json", AUTO_BACKUP_FILE_NAME)
+    }
+
+    private suspend fun hasLocalUserData(context: Context): Boolean {
+        val db = UltraDeepApplication.instance.database
+        if (db.lyricsDao().getAllLyrics().isNotEmpty() ||
+            db.favoriteDao().getAllFavorites().isNotEmpty() ||
+            db.playlistDao().getAllPlaylistsSync().isNotEmpty() ||
+            db.playlistDao().getAllPlaylistSongsSync().isNotEmpty() ||
+            ArtworkManager.getAllCustomArtworkFiles(context).isNotEmpty() ||
+            ArtworkManager.hasCustomGlobalDefault(context)) return true
+
+        return context.getSharedPreferences("lyrics_timer_prefs", Context.MODE_PRIVATE)
+            .all.keys.any { it.startsWith("lyrics_offset_") }
+    }
 
     suspend fun createBackupJson(context: Context): String = withContext(Dispatchers.IO) {
         val root = JSONObject()

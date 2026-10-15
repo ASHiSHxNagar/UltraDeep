@@ -12,8 +12,10 @@ android {
         applicationId = "com.ultradeep.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI artifacts need monotonically increasing versions for Android's updater.
+        // Local builds use 2 as the first post-backup update.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.plus(1) ?: 2
+        versionName = "1.0.$versionCode"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

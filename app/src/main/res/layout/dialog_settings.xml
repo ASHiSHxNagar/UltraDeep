@@ -187,9 +187,56 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Export or restore your lyrics, sync timers, favorites, playlists and custom artworks to avoid data loss on updates."
+            android:text="Keep an automatic copy of your lyrics, sync timers, favorites, playlists and artwork in a folder that stays after uninstall."
             android:textColor="@color/text_secondary"
             android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvAutoBackupStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Choose a folder. UltraDeep will refresh its backup when opened and when it goes to the background."
+            android:textColor="@color/text_primary"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnChooseAutoBackupFolder"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Choose automatic backup folder"
+            android:textColor="@color/neon_cyan"
+            app:backgroundTint="@color/surface_dark"
+            app:cornerRadius="10dp"
+            app:icon="@drawable/ic_album"
+            app:iconTint="@color/neon_cyan" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnBackupNow"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Back up now"
+                android:textColor="@color/neon_cyan" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRestoreAutoBackup"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Restore backup"
+                android:textColor="@color/neon_cyan" />
+        </LinearLayout>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnExportBackup"
