@@ -59,7 +59,7 @@ class PlaylistDetailBottomSheet : BottomSheetDialogFragment {
             },
             onSongMoreClicked = { song ->
                 viewLifecycleOwner.lifecycleScope.launch {
-                    playlistDao.removeSongFromPlaylist(playlist.id, song.id)
+                    playlistDao.removeSongFromPlaylist(currentPlaylist.id, song.id)
                 }
             }
         )
@@ -68,7 +68,7 @@ class PlaylistDetailBottomSheet : BottomSheetDialogFragment {
         binding.rvPlaylistSongs.adapter = adapter
 
         viewLifecycleOwner.lifecycleScope.launch {
-            playlistDao.getSongIdsForPlaylist(playlist.id).collectLatest { songIds ->
+            playlistDao.getSongIdsForPlaylist(currentPlaylist.id).collectLatest { songIds ->
                 val idSet = songIds.toSet()
                 playlistSongs.clear()
                 playlistSongs.addAll(allSongs.filter { idSet.contains(it.id) })

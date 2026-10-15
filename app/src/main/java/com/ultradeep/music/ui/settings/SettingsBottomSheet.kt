@@ -156,7 +156,7 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
                 binding.btnRescanStorage.isEnabled = true
                 binding.tvRescanStatus.text = getString(R.string.rescan_complete)
                 Toast.makeText(requireContext(), "${songs.size} tracks found", Toast.LENGTH_SHORT).show()
-                onLibraryRescanned()
+                onLibraryRescanned?.invoke()
             }
         }
     }
