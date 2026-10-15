@@ -3,6 +3,7 @@ package com.ultradeep.music.ui.view
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -17,6 +18,8 @@ class AmbientGlowView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
+
+    private val isLightTheme = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES
 
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -56,8 +59,9 @@ class AmbientGlowView @JvmOverloads constructor(
     }
 
     fun setGlowColors(primaryColor: Int, secondaryColor: Int, animate: Boolean = true) {
-        targetCenterColor = adjustAlpha(primaryColor, 0.65f)
-        targetMidColor = adjustAlpha(secondaryColor, 0.35f)
+        // In light mode this is a soft colour wash around the art, not a dark neon halo.
+        targetCenterColor = adjustAlpha(primaryColor, if (isLightTheme) 0.22f else 0.65f)
+        targetMidColor = adjustAlpha(secondaryColor, if (isLightTheme) 0.12f else 0.35f)
 
         if (!animate) {
             currentCenterColor = targetCenterColor

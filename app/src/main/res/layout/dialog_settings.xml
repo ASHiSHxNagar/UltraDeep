@@ -207,7 +207,55 @@
             android:textColor="@color/neon_cyan" />
     </LinearLayout>
 
-    <!-- 4. Storage Scanning Section -->
+    <!-- 4. Lyrics download controls. Downloads are always opt-in and never replace saved lyrics. -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="LYRICS DOWNLOAD &amp; SAVE"
+        android:textColor="@color/neon_cyan"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_card_rounded"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tvLyricsSyncStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Downloads only tracks without saved lyrics. Existing fetched and custom lyrics are kept."
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSyncMissingLyrics"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Sync lyrics for unsaved tracks"
+            android:textColor="@color/neon_cyan"
+            app:backgroundTint="@color/surface_dark"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_lyrics"
+            app:iconTint="@color/neon_cyan" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSyncLyricsAfterDate"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Sync only tracks added after a date"
+            android:textColor="@color/neon_cyan" />
+    </LinearLayout>
+
+    <!-- 5. Storage Scanning Section -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

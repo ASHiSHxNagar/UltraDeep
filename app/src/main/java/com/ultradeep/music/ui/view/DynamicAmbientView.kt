@@ -3,6 +3,7 @@ package com.ultradeep.music.ui.view
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -22,13 +23,15 @@ class DynamicAmbientView @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     // Base background paint
+    private val isLightTheme = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES
+
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#06060A") // Deep AMOLED dark base
+        color = Color.parseColor(if (isLightTheme) "#F7F9FC" else "#06060A")
     }
 
     // Gentle scrim overlay to ensure 100% text contrast & sharp readability
     private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#3305050A")
+        color = Color.parseColor(if (isLightTheme) "#14FFFFFF" else "#3305050A")
     }
 
     // 5 Corner & Center luminous emitters covering all 4 corners, center, and edges
@@ -120,13 +123,15 @@ class DynamicAmbientView @JvmOverloads constructor(
         if (newHue < 0f) newHue += 360f
         hsvBuffer[0] = newHue
         // Ensure rich neon saturation and brightness for vivid glowing ambiance
-        hsvBuffer[1] = hsvBuffer[1].coerceAtLeast(0.75f)
-        hsvBuffer[2] = hsvBuffer[2].coerceAtLeast(0.85f)
+        hsvBuffer[1] = if (isLightTheme) hsvBuffer[1].coerceIn(0.40f, 0.70f) else hsvBuffer[1].coerceAtLeast(0.75f)
+        hsvBuffer[2] = if (isLightTheme) hsvBuffer[2].coerceIn(0.55f, 0.82f) else hsvBuffer[2].coerceAtLeast(0.85f)
         return Color.HSVToColor(hsvBuffer)
     }
 
     private fun colorWithAlpha(color: Int, alphaFloat: Float): Int {
-        val alpha = (alphaFloat * 255).toInt().coerceIn(0, 255)
+        // Pastel, low-opacity light-theme ambience keeps the artwork alive without
+        // turning the player into a dark screen with unreadable dark text.
+        val alpha = (alphaFloat * (if (isLightTheme) 0.22f else 1f) * 255).toInt().coerceIn(0, 255)
         return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
     }
 

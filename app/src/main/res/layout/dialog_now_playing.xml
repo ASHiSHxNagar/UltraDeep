@@ -121,7 +121,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:background="@drawable/bg_pill_sort"
-                    android:backgroundTint="#80101018"
+                    android:backgroundTint="@color/surface_card"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:paddingStart="8dp"

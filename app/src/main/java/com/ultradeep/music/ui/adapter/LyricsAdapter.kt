@@ -66,9 +66,13 @@ class LyricsAdapter(
                 if (immediate || kotlin.math.abs(newIndex - oldIndex) > 2) {
                     // Instant accurate jump to exact vertical center during seeking
                     if (layoutManager != null) {
-                        val rvHeight = recyclerView.height
-                        val centerOffset = (rvHeight / 2) - 80
-                        layoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
+                        // Post until RecyclerView has measured its padded lyric viewport.
+                        // This preserves the centre position even after a large seek near
+                        // the final line, where the old immediate jump could land at end.
+                        recyclerView.post {
+                            val centerOffset = (recyclerView.height / 2) - (28 * recyclerView.resources.displayMetrics.density).toInt()
+                            layoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
+                        }
                     }
                 } else {
                     smoothScrollToActiveLine(recyclerView, activeIndex)
@@ -137,18 +141,25 @@ class LyricsAdapter(
 
         fun bind(line: LyricLine, isActive: Boolean) {
             tvLine.text = line.text
+            tvLine.animate().cancel()
+            itemView.animate().cancel()
             if (isActive) {
-                // Spotify Active Lyric: High-contrast pure white, bold sans-serif, increased font (+2sp)
-                tvLine.setTextColor(Color.WHITE)
+                // The active line rises into focus; the former current line shrinks away
+                // on its next bind, echoing the compact Spotify-style lyric motion.
+                tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_primary))
                 tvLine.textSize = 26f
                 tvLine.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD))
                 tvLine.alpha = 1.0f
+                itemView.scaleX = 0.94f
+                itemView.scaleY = 0.94f
+                itemView.translationY = 18f
+                itemView.animate().translationY(0f).scaleX(1.04f).scaleY(1.04f).setDuration(220).start()
             } else {
-                // Spotify Inactive Lyric: Muted slate-cyan, semi-bold (+2sp)
-                tvLine.setTextColor(Color.parseColor("#7D9B9B"))
+                tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_inactive_lyric))
                 tvLine.textSize = 20f
                 tvLine.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
                 tvLine.alpha = 0.65f
+                itemView.animate().translationY(0f).scaleX(0.96f).scaleY(0.96f).setDuration(160).start()
             }
         }
     }

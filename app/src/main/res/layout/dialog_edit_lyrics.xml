@@ -1,125 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:background="@drawable/bg_bottom_sheet"
-    android:orientation="vertical"
-    android:padding="24dp">
-
-    <!-- Drag Handle -->
-    <View
-        android:layout_width="40dp"
-        android:layout_height="4dp"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="16dp"
-        android:background="@drawable/bg_pill_sort"
-        android:backgroundTint="@color/stroke_border" />
-
-    <TextView
-        android:id="@+id/tvEditLyricsTitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="sans-serif-bold"
-        android:text="@string/edit_custom_lyrics"
-        android:textColor="@color/text_primary"
-        android:textSize="20sp" />
-
-    <TextView
-        android:id="@+id/tvSongSubtitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Track Title • Artist"
-        android:textColor="@color/neon_cyan"
-        android:textSize="13sp" />
-
-    <!-- Online URL Fetch Box -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            app:boxBackgroundColor="@color/surface_dark"
-            app:boxStrokeColor="@color/neon_cyan"
-            app:hintTextColor="@color/text_secondary">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etLrcUrl"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/enter_lrc_url"
-                android:inputType="textUri"
-                android:textColor="@color/text_primary"
-                android:textSize="13sp" />
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_bottom_sheet" android:orientation="vertical" android:padding="24dp">
+    <View android:layout_width="40dp" android:layout_height="4dp" android:layout_gravity="center_horizontal" android:layout_marginBottom="16dp" android:background="@drawable/bg_pill_sort" android:backgroundTint="@color/stroke_border" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+            <TextView android:id="@+id/tvEditLyricsTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:fontFamily="sans-serif-bold" android:text="Lyrics" android:textColor="@color/text_primary" android:textSize="20sp" />
+            <TextView android:id="@+id/tvSongSubtitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/neon_cyan" android:textSize="13sp" />
+        </LinearLayout>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnEditMode" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="wrap_content" android:layout_height="40dp" android:text="Edit" android:textColor="@color/neon_cyan" app:backgroundTint="@color/surface_variant" app:cornerRadius="20dp" />
+    </LinearLayout>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Saved lyrics stay offline. Tap Edit to change the HH:MM:SS timestamp or lyric text." android:textColor="@color/text_secondary" android:textSize="12sp" />
+    <ScrollView android:layout_width="match_parent" android:layout_height="260dp" android:layout_marginTop="12dp" android:background="@drawable/bg_card_rounded" android:fillViewport="true">
+        <LinearLayout android:id="@+id/lyricsRowsContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="10dp" />
+    </ScrollView>
+    <LinearLayout android:id="@+id/urlFetchContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center_vertical" android:orientation="horizontal" android:visibility="gone">
+        <com.google.android.material.textfield.TextInputLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" app:boxBackgroundColor="@color/surface_variant" app:hintTextColor="@color/text_secondary">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/etLrcUrl" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="LRC URL (optional)" android:inputType="textUri" android:textColor="@color/text_primary" android:textSize="13sp" />
         </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnFetchUrl"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="@string/fetch_online_lrc"
-            android:textColor="@color/amoled_black"
-            app:backgroundTint="@color/neon_cyan"
-            app:cornerRadius="12dp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnFetchUrl" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Import" android:textColor="@color/amoled_black" app:backgroundTint="@color/neon_cyan" app:cornerRadius="12dp" />
     </LinearLayout>
-
-    <!-- LRC Text Input Area -->
-    <com.google.android.material.textfield.TextInputLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        app:boxBackgroundColor="@color/surface_dark"
-        app:boxStrokeColor="@color/neon_cyan"
-        app:hintTextColor="@color/text_secondary">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etLyricsContent"
-            android:layout_width="match_parent"
-            android:layout_height="200dp"
-            android:gravity="top|start"
-            android:hint="@string/custom_lyrics_hint"
-            android:inputType="textMultiLine"
-            android:textColor="@color/text_primary"
-            android:textSize="13sp" />
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <!-- Action Buttons -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:orientation="horizontal">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnResetLyrics"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_weight="1"
-            android:text="@string/reset_lyrics"
-            android:textColor="@color/text_secondary"
-            app:cornerRadius="14dp"
-            app:strokeColor="@color/stroke_border" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSaveLyrics"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:text="@string/save_lyrics"
-            android:textColor="@color/amoled_black"
-            app:backgroundTint="@color/neon_cyan"
-            app:cornerRadius="14dp" />
+    <LinearLayout android:id="@+id/editActions" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:orientation="horizontal" android:visibility="gone">
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnCancelEdit" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:layout_weight="1" android:text="Cancel" android:textColor="@color/text_secondary" app:cornerRadius="14dp" app:strokeColor="@color/stroke_border" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnSaveLyrics" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_weight="1" android:text="Save" android:textColor="@color/amoled_black" app:backgroundTint="@color/neon_cyan" app:cornerRadius="14dp" />
     </LinearLayout>
-
+    <com.google.android.material.button.MaterialButton android:id="@+id/btnAddLyricLine" style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="+ Add lyric line" android:textColor="@color/neon_cyan" android:visibility="gone" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/btnResetLyrics" style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center_horizontal" android:layout_marginTop="4dp" android:text="Remove saved lyrics" android:textColor="@color/text_secondary" />
 </LinearLayout>

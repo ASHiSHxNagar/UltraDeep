@@ -121,7 +121,33 @@
             android:textSize="15sp" />
     </LinearLayout>
 
-    <!-- 3. Rename Song -->
+    <!-- 3. Download lyrics only when the user requests it -->
+    <LinearLayout
+        android:id="@+id/optFetchLyrics"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_lyrics"
+            app:tint="@color/neon_cyan" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text="Fetch and save lyrics"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <!-- 4. Rename Song -->
     <LinearLayout
         android:id="@+id/optRenameSong"
         android:layout_width="match_parent"
@@ -147,7 +173,7 @@
             android:textSize="15sp" />
     </LinearLayout>
 
-    <!-- 4. Song Details / Properties -->
+    <!-- 5. Song Details / Properties -->
     <LinearLayout
         android:id="@+id/optSongDetails"
         android:layout_width="match_parent"
@@ -173,7 +199,7 @@
             android:textSize="15sp" />
     </LinearLayout>
 
-    <!-- 5. Delete Song -->
+    <!-- 6. Delete Song -->
     <LinearLayout
         android:id="@+id/optDeleteSong"
         android:layout_width="match_parent"

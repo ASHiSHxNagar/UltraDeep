@@ -28,10 +28,9 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
                     isInstrumental = true
                 )
             }
-            // If already cached with synchronized timestamps, return immediately
-            if (cached.isSynced) {
-                return@withContext LrcParser.parse(cached.lrcContent, false)
-            }
+            // A saved plain lyric is still a deliberate cached result.  Reusing it avoids
+            // repeatedly hitting the network every time this track is played.
+            return@withContext LrcParser.parse(cached.lrcContent, cached.isCustom)
         }
 
         // Fetch from LRCLIB API
@@ -154,6 +153,11 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
 
         // Return empty result if not found
         LrcResult(emptyList(), false, "")
+    }
+
+    /** True when this track already has either downloaded or manually saved lyrics. */
+    suspend fun hasSavedLyrics(songId: Long): Boolean = withContext(Dispatchers.IO) {
+        lyricsDao.getLyricsForSong(songId) != null
     }
 
     private fun scoreCandidate(

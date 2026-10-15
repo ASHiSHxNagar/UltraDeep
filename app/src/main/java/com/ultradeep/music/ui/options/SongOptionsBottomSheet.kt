@@ -10,9 +10,11 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import coil.load
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ultradeep.music.R
+import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.data.model.Song
 import com.ultradeep.music.databinding.DialogRenameSongBinding
 import com.ultradeep.music.databinding.DialogSongDetailsBinding
@@ -22,6 +24,7 @@ import com.ultradeep.music.ui.playlist.AddToPlaylistBottomSheet
 import com.ultradeep.music.util.ArtworkManager
 import com.ultradeep.music.util.FileUtil
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 class SongOptionsBottomSheet : BottomSheetDialogFragment {
 
@@ -87,6 +90,21 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment {
 
         binding.optSetCustomArt.setOnClickListener {
             pickArtworkLauncher.launch("image/*")
+        }
+
+        binding.optFetchLyrics.setOnClickListener {
+            binding.optFetchLyrics.isEnabled = false
+            viewLifecycleOwner.lifecycleScope.launch {
+                val result = UltraDeepApplication.instance.lyricsRepository.getLyrics(currentSong, forceRefresh = true)
+                val message = when {
+                    result.isInstrumental -> "Marked as instrumental and saved"
+                    result.lines.isNotEmpty() -> "Lyrics fetched and saved offline"
+                    else -> "Lyrics were not found"
+                }
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+                binding.optFetchLyrics.isEnabled = true
+                if (result.lines.isNotEmpty() || result.isInstrumental) dismiss()
+            }
         }
 
         binding.optRenameSong.setOnClickListener {

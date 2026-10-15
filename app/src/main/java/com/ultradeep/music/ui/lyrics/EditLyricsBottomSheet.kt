@@ -1,31 +1,37 @@
 package com.ultradeep.music.ui.lyrics
 
 import android.os.Bundle
+import android.text.InputType
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.ultradeep.music.R
 import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.data.model.Song
 import com.ultradeep.music.databinding.DialogEditLyricsBinding
+import com.ultradeep.music.util.LrcParser
 import kotlinx.coroutines.launch
+import java.util.Locale
 
-class EditLyricsBottomSheet : BottomSheetDialogFragment {
+class EditLyricsBottomSheet : BottomSheetDialogFragment() {
 
     private var song: Song? = null
-    private var initialContent: String = ""
+    private var initialContent = ""
     private var onLyricsUpdated: (() -> Unit)? = null
+    private var editing = false
+    private val rows = mutableListOf<RowViews>()
 
     constructor() : super()
-
-    constructor(
-        song: Song,
-        initialContent: String,
-        onLyricsUpdated: () -> Unit
-    ) : super() {
+    constructor(song: Song, initialContent: String, onLyricsUpdated: () -> Unit) : super() {
         this.song = song
         this.initialContent = initialContent
         this.onLyricsUpdated = onLyricsUpdated
@@ -33,80 +39,153 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
 
     private var _binding: DialogEditLyricsBinding? = null
     private val binding get() = _binding!!
+    private data class RowViews(val time: EditText, val lyric: EditText)
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = DialogEditLyricsBinding.inflate(inflater, container, false)
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        val currentSong = song ?: run {
-            dismissAllowingStateLoss()
-            return
-        }
-
+        val currentSong = song ?: run { dismissAllowingStateLoss(); return }
         binding.tvSongSubtitle.text = "${currentSong.title} • ${currentSong.artist}"
-        binding.etLyricsContent.setText(initialContent)
+        populateRows(initialContent)
+        setEditing(false)
 
-        val repository = UltraDeepApplication.instance.lyricsRepository
-
-        binding.btnFetchUrl.setOnClickListener {
-            val url = binding.etLrcUrl.text?.toString()?.trim()
-            if (url.isNullOrEmpty()) {
-                Toast.makeText(requireContext(), "Please enter an LRC URL", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            viewLifecycleOwner.lifecycleScope.launch {
-                binding.btnFetchUrl.isEnabled = false
-                val fetched = repository.fetchLrcFromUrl(url)
-                binding.btnFetchUrl.isEnabled = true
-                if (!fetched.isNullOrEmpty()) {
-                    binding.etLyricsContent.setText(fetched)
-                    Toast.makeText(requireContext(), "LRC downloaded successfully", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), "Failed to fetch LRC from URL", Toast.LENGTH_SHORT).show()
-                }
-            }
+        binding.btnEditMode.setOnClickListener { setEditing(true) }
+        binding.btnAddLyricLine.setOnClickListener { addRow("", "") }
+        binding.btnCancelEdit.setOnClickListener {
+            populateRows(initialContent)
+            setEditing(false)
         }
-
-        binding.btnSaveLyrics.setOnClickListener {
-            val content = binding.etLyricsContent.text?.toString()?.trim() ?: ""
-            if (content.isEmpty()) {
-                Toast.makeText(requireContext(), "Please paste some lyrics or timestamps", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            viewLifecycleOwner.lifecycleScope.launch {
-                repository.saveCustomLyrics(currentSong, content)
-                Toast.makeText(requireContext(), R.string.lyrics_saved, Toast.LENGTH_SHORT).show()
-                onLyricsUpdated?.invoke()
-                dismiss()
-            }
-        }
-
+        binding.btnFetchUrl.setOnClickListener { importFromUrl() }
+        binding.btnSaveLyrics.setOnClickListener { saveRows(currentSong) }
         binding.btnResetLyrics.setOnClickListener {
             viewLifecycleOwner.lifecycleScope.launch {
-                repository.resetLyrics(currentSong.id)
-                Toast.makeText(requireContext(), "Reset to automatic lyrics", Toast.LENGTH_SHORT).show()
+                UltraDeepApplication.instance.lyricsRepository.resetLyrics(currentSong.id)
+                Toast.makeText(requireContext(), "Saved lyrics removed", Toast.LENGTH_SHORT).show()
                 onLyricsUpdated?.invoke()
                 dismiss()
             }
         }
     }
 
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
+    private fun populateRows(content: String) {
+        rows.clear()
+        binding.lyricsRowsContainer.removeAllViews()
+        val parsed = LrcParser.parse(content, true)
+        if (parsed.lines.isEmpty()) addRow("", "No lyrics saved. Tap Edit to paste or import an LRC file.")
+        else parsed.lines.forEach { line ->
+            addRow(if (line.timestampMs >= 0) formatTimestamp(line.timestampMs) else "", line.text)
+        }
     }
 
-    companion object {
-        const val TAG = "EditLyricsBottomSheet"
+    private fun addRow(timestamp: String, lyricText: String) {
+        val context = requireContext()
+        val horizontal = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = true
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = (8 * resources.displayMetrics.density).toInt()
+            }
+        }
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(4, 2, 4, 2)
+        }
+        val time = EditText(context).apply {
+            setText(timestamp)
+            hint = "HH:MM:SS"
+            inputType = InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
+            setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
+            background = ContextCompat.getDrawable(context, R.drawable.bg_pill_sort)
+            setPadding(14, 0, 14, 0)
+            layoutParams = LinearLayout.LayoutParams((112 * resources.displayMetrics.density).toInt(), (44 * resources.displayMetrics.density).toInt())
+        }
+        val lyric = EditText(context).apply {
+            setText(lyricText)
+            hint = "Lyric"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 1
+            maxLines = 3
+            textSize = 15f
+            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
+            setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
+            background = ContextCompat.getDrawable(context, R.drawable.bg_pill_sort)
+            setPadding(14, 0, 14, 0)
+            layoutParams = LinearLayout.LayoutParams((300 * resources.displayMetrics.density).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = (8 * resources.displayMetrics.density).toInt()
+            }
+        }
+        row.addView(time); row.addView(lyric); horizontal.addView(row)
+        binding.lyricsRowsContainer.addView(horizontal)
+        rows += RowViews(time, lyric)
     }
+
+    private fun setEditing(enabled: Boolean) {
+        editing = enabled
+        rows.forEach { (time, lyric) -> time.isEnabled = enabled; lyric.isEnabled = enabled }
+        binding.btnEditMode.visibility = if (enabled) View.GONE else View.VISIBLE
+        binding.editActions.visibility = if (enabled) View.VISIBLE else View.GONE
+        binding.btnAddLyricLine.visibility = if (enabled) View.VISIBLE else View.GONE
+        binding.urlFetchContainer.visibility = if (enabled) View.VISIBLE else View.GONE
+        binding.btnResetLyrics.visibility = if (enabled) View.GONE else View.VISIBLE
+    }
+
+    private fun importFromUrl() {
+        val url = binding.etLrcUrl.text?.toString()?.trim()
+        if (url.isNullOrEmpty()) { Toast.makeText(requireContext(), "Enter an LRC URL", Toast.LENGTH_SHORT).show(); return }
+        viewLifecycleOwner.lifecycleScope.launch {
+            binding.btnFetchUrl.isEnabled = false
+            val fetched = UltraDeepApplication.instance.lyricsRepository.fetchLrcFromUrl(url)
+            binding.btnFetchUrl.isEnabled = true
+            if (fetched.isNullOrBlank()) Toast.makeText(requireContext(), "Could not import LRC", Toast.LENGTH_SHORT).show()
+            else { populateRows(fetched); setEditing(true); Toast.makeText(requireContext(), "LRC imported — review and Save", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    private fun saveRows(currentSong: Song) {
+        val output = buildString {
+            rows.forEach { (time, lyric) ->
+                val text = lyric.text.toString().trim()
+                if (text.isEmpty()) return@forEach
+                val ms = parseTimestamp(time.text.toString())
+                if (ms == null) appendLine(text) else appendLine("[${formatLrcTimestamp(ms)}]$text")
+            }
+        }.trim()
+        if (output.isBlank()) { Toast.makeText(requireContext(), "Add at least one lyric", Toast.LENGTH_SHORT).show(); return }
+        viewLifecycleOwner.lifecycleScope.launch {
+            UltraDeepApplication.instance.lyricsRepository.saveCustomLyrics(currentSong, output)
+            initialContent = output
+            Toast.makeText(requireContext(), R.string.lyrics_saved, Toast.LENGTH_SHORT).show()
+            onLyricsUpdated?.invoke()
+            dismiss()
+        }
+    }
+
+    /** Supports HH:MM:SS(.mmm), MM:SS(.mmm), and an empty value for plain lyrics. */
+    private fun parseTimestamp(value: String): Long? {
+        val raw = value.trim()
+        if (raw.isEmpty()) return null
+        val match = Regex("^(\\d{1,2}:)?(\\d{1,2}):(\\d{2})(?:\\.(\\d{1,3}))?$").matchEntire(raw) ?: return null
+        val hours = match.groupValues[1].removeSuffix(":").toLongOrNull() ?: 0L
+        val minutes = match.groupValues[2].toLongOrNull() ?: return null
+        val seconds = match.groupValues[3].toLongOrNull() ?: return null
+        if (minutes > 59 || seconds > 59) return null
+        val fraction = match.groupValues[4].padEnd(3, '0').toLongOrNull() ?: 0L
+        return ((hours * 3600 + minutes * 60 + seconds) * 1000) + fraction
+    }
+
+    private fun formatTimestamp(ms: Long): String {
+        val totalSeconds = ms / 1000
+        return String.format(Locale.US, "%02d:%02d:%02d.%03d", totalSeconds / 3600, (totalSeconds / 60) % 60, totalSeconds % 60, ms % 1000)
+    }
+    private fun formatLrcTimestamp(ms: Long): String = String.format(Locale.US, "%02d:%02d.%03d", ms / 60000, (ms / 1000) % 60, ms % 1000)
+
+    override fun onDestroyView() { super.onDestroyView(); _binding = null }
+    companion object { const val TAG = "EditLyricsBottomSheet" }
 }

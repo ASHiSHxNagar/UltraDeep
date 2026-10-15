@@ -343,19 +343,11 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun updateOffsetUI() {
-        val firstLineTs = lyricsAdapter.getFirstLineTimestamp()
-        if (firstLineTs > 0L) {
-            val effectiveStartSec = (firstLineTs + currentSongOffsetMs).coerceAtLeast(0L) / 1000f
-            binding.tvCurrentOffset.text = String.format(Locale.getDefault(), "Starts @ %.1fs", effectiveStartSec)
-        } else {
-            val seconds = currentSongOffsetMs / 1000f
-            binding.tvCurrentOffset.text = if (currentSongOffsetMs == 0L) "Sync: 0.0s" else String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
-        }
+        val seconds = currentSongOffsetMs / 1000f
+        binding.tvCurrentOffset.text = if (currentSongOffsetMs == 0L) "Sync: 0.0s" else String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
     }
 
     private fun showCustomOffsetInputDialog() {
-        val firstLineTs = lyricsAdapter.getFirstLineTimestamp()
-        val currentStartSec = (firstLineTs + currentSongOffsetMs).coerceAtLeast(0L) / 1000f
         val currentPosSec = MusicController.currentPosition.value / 1000f
 
         val layout = LinearLayout(requireContext()).apply {
@@ -366,8 +358,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         val tvInfo = TextView(requireContext()).apply {
             text = String.format(
                 Locale.getDefault(),
-                "Song me singer pehli line kab gaata hai?\nOriginal LRC line 1: %.1fs",
-                firstLineTs / 1000f
+                "Use + to show lyrics later and − to show them earlier.\nFormats: +1.5, -0.75, or +00:00:01.500"
             )
             setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
             textSize = 13f
@@ -376,36 +367,52 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         layout.addView(tvInfo)
 
         val input = EditText(requireContext()).apply {
-            hint = "e.g. 20.0 or 15.5"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(String.format(Locale.getDefault(), "%.1f", currentStartSec))
+            hint = "e.g. +1.5 or -00:00:00.750"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            setText(String.format(Locale.getDefault(), "%+.3f", currentSongOffsetMs / 1000f))
         }
         layout.addView(input)
 
         val btnUseCurrent = MaterialButton(requireContext(), null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
-            text = String.format(Locale.getDefault(), "Use Current Song Position (%.1fs)", currentPosSec)
+            text = String.format(Locale.getDefault(), "Set to current position (+%.1fs)", currentPosSec)
             setOnClickListener {
-                input.setText(String.format(Locale.getDefault(), "%.1f", currentPosSec))
+                input.setText(String.format(Locale.getDefault(), "%+.3f", currentPosSec))
             }
         }
         layout.addView(btnUseCurrent)
 
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Set First Lyric Start Time")
+            .setTitle("Set Lyrics Sync Offset")
             .setView(layout)
             .setPositiveButton("Save") { _, _ ->
-                val targetSec = input.text.toString().toDoubleOrNull() ?: currentStartSec.toDouble()
-                val targetMs = (targetSec * 1000).toLong()
-                val calculatedOffset = targetMs - firstLineTs
-                setSyncOffset(calculatedOffset)
+                val offset = parseSignedOffsetMs(input.text.toString())
+                if (offset == null) {
+                    Toast.makeText(requireContext(), "Enter +1.5, -0.75, or HH:MM:SS", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                setSyncOffset(offset)
                 Toast.makeText(
                     requireContext(),
-                    String.format(Locale.getDefault(), "Lyrics synced to start at %.1fs!", targetSec),
+                    String.format(Locale.getDefault(), "Lyrics offset set to %+.2fs", offset / 1000f),
                     Toast.LENGTH_SHORT
                 ).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun parseSignedOffsetMs(value: String): Long? {
+        val raw = value.trim().replace('−', '-')
+        if (raw.isBlank()) return null
+        raw.toDoubleOrNull()?.let { return (it * 1000).toLong() }
+        val match = Regex("^([+-])?(\\d{1,2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?$").matchEntire(raw) ?: return null
+        val hours = match.groupValues[2].toLongOrNull() ?: return null
+        val minutes = match.groupValues[3].toLongOrNull() ?: return null
+        val seconds = match.groupValues[4].toLongOrNull() ?: return null
+        if (minutes > 59 || seconds > 59) return null
+        val millis = match.groupValues[5].padEnd(3, '0').toLongOrNull() ?: 0L
+        val positive = ((hours * 3600 + minutes * 60 + seconds) * 1000) + millis
+        return if (match.groupValues[1] == "-") -positive else positive
     }
 
     private fun toggleLyricsMode(showLyrics: Boolean) {
@@ -592,14 +599,32 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     private fun loadLyricsForSong(song: Song, forceRefresh: Boolean) {
         lyricsRequestSongId = song.id
         binding.tvLyricsStatus.visibility = View.VISIBLE
-        binding.tvLyricsStatus.text = getString(R.string.lyrics_loading)
+        binding.tvLyricsStatus.text = "Loading saved lyrics…"
 
         val repository = UltraDeepApplication.instance.lyricsRepository
         viewLifecycleOwner.lifecycleScope.launch {
+            // Playback never starts a network request on its own. Fetching is explicit
+            // from the track menu or the Settings bulk actions, and every successful
+            // response is persisted before this screen renders it.
+            if (!repository.hasSavedLyrics(song.id)) {
+                if (isAdded && lyricsRequestSongId == song.id && currentSongId == song.id) {
+                    rawLyricsCache = ""
+                    lyricsAdapter.submitLines(emptyList())
+                    binding.tvLyricsStatus.text = "Lyrics not saved yet • use Fetch lyrics in the track menu"
+                }
+                return@launch
+            }
             val result = repository.getLyrics(song, forceRefresh)
             // Requests can finish out of order when the user skips quickly.
             if (!isAdded || lyricsRequestSongId != song.id || currentSongId != song.id) return@launch
-            rawLyricsCache = result.plainText
+            rawLyricsCache = if (result.isSynced) {
+                result.lines.joinToString("\n") { line ->
+                    val minutes = line.timestampMs / 60_000
+                    val seconds = (line.timestampMs / 1_000) % 60
+                    val millis = line.timestampMs % 1_000
+                    String.format(Locale.US, "[%02d:%02d.%03d]%s", minutes, seconds, millis, line.text)
+                }
+            } else result.plainText
 
             if (result.isInstrumental) {
                 binding.tvLyricsStatus.visibility = View.VISIBLE

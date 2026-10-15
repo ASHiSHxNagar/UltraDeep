@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.app.DatePickerDialog
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import coil.load
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.ultradeep.music.R
+import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.databinding.DialogSettingsBinding
 import com.ultradeep.music.scanner.AudioScanner
 import com.ultradeep.music.service.MusicController
@@ -21,6 +23,7 @@ import com.ultradeep.music.util.ArtworkManager
 import com.ultradeep.music.util.BackupManager
 import com.ultradeep.music.util.FileUtil
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 class SettingsBottomSheet : BottomSheetDialogFragment {
 
@@ -145,6 +148,27 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
             importBackupLauncher.launch("*/*")
         }
 
+        binding.btnSyncMissingLyrics.setOnClickListener {
+            syncMissingLyrics()
+        }
+
+        binding.btnSyncLyricsAfterDate.setOnClickListener {
+            val calendar = Calendar.getInstance()
+            DatePickerDialog(
+                requireContext(),
+                { _, year, month, day ->
+                    val selected = Calendar.getInstance().apply {
+                        set(year, month, day, 0, 0, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    syncMissingLyrics(selected.timeInMillis / 1000L)
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+            ).show()
+        }
+
         // Setup Rescan Storage
         binding.btnRescanStorage.setOnClickListener {
             binding.tvRescanStatus.text = getString(R.string.rescanning)
@@ -176,6 +200,43 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
         } else {
             binding.tvDefaultArtStatus.text = "Active: Car Default Photo"
             binding.tvDefaultArtStatus.setTextColor(requireContext().getColor(R.color.text_primary))
+        }
+    }
+
+    /**
+     * Intentionally skips every track with a Room entry, whether it was downloaded,
+     * marked instrumental, or authored by the user. This makes the bulk action safe
+     * to re-run without wasting requests or overwriting work.
+     */
+    private fun syncMissingLyrics(afterEpochSeconds: Long? = null) {
+        val allSongs = MusicController.allSongs.value
+        val candidates = allSongs.filter { afterEpochSeconds == null || it.dateAdded >= afterEpochSeconds }
+        if (candidates.isEmpty()) {
+            binding.tvLyricsSyncStatus.text = "No tracks match this date."
+            return
+        }
+
+        binding.btnSyncMissingLyrics.isEnabled = false
+        binding.btnSyncLyricsAfterDate.isEnabled = false
+        viewLifecycleOwner.lifecycleScope.launch {
+            val repository = UltraDeepApplication.instance.lyricsRepository
+            var checked = 0
+            var downloaded = 0
+            var skipped = 0
+            candidates.forEach { song ->
+                checked++
+                if (repository.hasSavedLyrics(song.id)) {
+                    skipped++
+                } else {
+                    val result = repository.getLyrics(song, forceRefresh = true)
+                    if (result.lines.isNotEmpty() || result.isInstrumental) downloaded++
+                }
+                binding.tvLyricsSyncStatus.text = "Checking $checked/${candidates.size} • saved $downloaded • skipped $skipped"
+            }
+            binding.btnSyncMissingLyrics.isEnabled = true
+            binding.btnSyncLyricsAfterDate.isEnabled = true
+            binding.tvLyricsSyncStatus.text = "Finished: $downloaded saved, $skipped already saved."
+            Toast.makeText(requireContext(), "Lyrics sync complete", Toast.LENGTH_SHORT).show()
         }
     }
 
