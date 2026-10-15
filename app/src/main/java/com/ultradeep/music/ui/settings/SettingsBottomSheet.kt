@@ -23,6 +23,7 @@ import com.ultradeep.music.util.ArtworkManager
 import com.ultradeep.music.util.BackupManager
 import com.ultradeep.music.util.FileUtil
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import java.util.Calendar
 
 class SettingsBottomSheet : BottomSheetDialogFragment {
@@ -312,39 +313,58 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
      */
     private fun syncMissingLyrics(afterEpochSeconds: Long? = null) {
         val allSongs = MusicController.allSongs.value
+        if (allSongs.isEmpty()) {
+            showLyricsSyncStatus("Your music library is still loading. Rescan storage and try again.")
+            return
+        }
+
         val candidates = allSongs.filter { afterEpochSeconds == null || it.dateAdded >= afterEpochSeconds }
         if (candidates.isEmpty()) {
-            binding.tvLyricsSyncStatus.text = "No tracks match this date."
+            showLyricsSyncStatus("No tracks were added on or after the selected date.")
             return
         }
 
         binding.btnSyncMissingLyrics.isEnabled = false
         binding.btnSyncLyricsAfterDate.isEnabled = false
+        binding.tvLyricsSyncStatus.text = "Checking ${candidates.size} tracks for saved lyrics…"
         viewLifecycleOwner.lifecycleScope.launch {
             val repository = UltraDeepApplication.instance.lyricsRepository
             var checked = 0
             var downloaded = 0
             var skipped = 0
+            var notFound = 0
             try {
                 candidates.forEach { song ->
-                    checked++
                     if (repository.hasSavedLyrics(song.id)) {
                         skipped++
                     } else {
-                        val result = repository.getLyrics(song, forceRefresh = true)
-                        if (result.lines.isNotEmpty() || result.isInstrumental) downloaded++
+                        val result = repository.getLyrics(song)
+                        if (result.lines.isNotEmpty() || result.isInstrumental) downloaded++ else notFound++
                     }
-                    binding.tvLyricsSyncStatus.text = "Checking $checked/${candidates.size} • saved $downloaded • skipped $skipped"
+                    checked++
+                    showLyricsSyncStatus("Checking $checked/${candidates.size} • fetched $downloaded • already saved $skipped • not found $notFound")
                 }
-                binding.tvLyricsSyncStatus.text = "Finished: $downloaded saved, $skipped already saved."
-                Toast.makeText(requireContext(), "Lyrics sync complete", Toast.LENGTH_SHORT).show()
+                val summary = when {
+                    downloaded == 0 && skipped == candidates.size -> "All ${candidates.size} matching tracks already have saved lyrics. Nothing needed fetching."
+                    else -> "Finished: $downloaded fetched, $skipped already saved, $notFound not found."
+                }
+                showLyricsSyncStatus(summary)
+                context?.let { Toast.makeText(it, "Lyrics sync complete: $downloaded fetched, $notFound not found", Toast.LENGTH_LONG).show() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
-                binding.tvLyricsSyncStatus.text = "Sync stopped: ${error.localizedMessage ?: "please try again"}"
+                showLyricsSyncStatus("Sync stopped: ${error.localizedMessage ?: "please try again"}")
             } finally {
-                binding.btnSyncMissingLyrics.isEnabled = true
-                binding.btnSyncLyricsAfterDate.isEnabled = true
+                _binding?.let {
+                    it.btnSyncMissingLyrics.isEnabled = true
+                    it.btnSyncLyricsAfterDate.isEnabled = true
+                }
             }
         }
+    }
+
+    private fun showLyricsSyncStatus(message: String) {
+        _binding?.tvLyricsSyncStatus?.text = message
     }
 
     override fun onDestroyView() {
