@@ -48,6 +48,8 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
+        </service>
+
         <!-- FileProvider for Exporting Data Backups -->
         <provider
             android:name="androidx.core.content.FileProvider"
