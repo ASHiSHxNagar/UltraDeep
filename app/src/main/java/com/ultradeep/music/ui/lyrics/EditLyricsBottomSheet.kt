@@ -22,7 +22,7 @@ import com.ultradeep.music.util.LrcParser
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-class EditLyricsBottomSheet : BottomSheetDialogFragment() {
+class EditLyricsBottomSheet : BottomSheetDialogFragment {
 
     private var song: Song? = null
     private var initialContent = ""
