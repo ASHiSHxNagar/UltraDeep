@@ -1,30 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- UltraDeep AMOLED Theme Palette -->
-    <color name="amoled_black">#08080C</color>
-    <color name="surface_dark">#101018</color>
-    <color name="surface_variant">#161622</color>
-    <color name="surface_card">#1B1B2A</color>
-    <color name="stroke_border">#28283C</color>
+    <!-- UltraDeep Light Theme Palette -->
+    <color name="amoled_black">#F5F6FA</color>
+    <color name="surface_dark">#FFFFFF</color>
+    <color name="surface_variant">#E9EBF0</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="stroke_border">#DFE2EA</color>
     
-    <!-- Neon Cyan & Deep Violet Brand Colors -->
-    <color name="neon_cyan">#00F5D4</color>
-    <color name="neon_cyan_glow">#3300F5D4</color>
-    <color name="deep_violet">#7928CA</color>
-    <color name="deep_violet_glow">#4D7928CA</color>
-    <color name="electric_purple">#9D4EDD</color>
-    <color name="vibrant_magenta">#F72585</color>
+    <!-- Neon Cyan & Deep Violet Brand Colors (High-Contrast for Light Mode) -->
+    <color name="neon_cyan">#009688</color>
+    <color name="neon_cyan_glow">#33009688</color>
+    <color name="deep_violet">#673AB7</color>
+    <color name="deep_violet_glow">#33673AB7</color>
+    <color name="electric_purple">#7B2CBF</color>
+    <color name="vibrant_magenta">#D81B60</color>
     
     <!-- Typography Colors -->
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#B0B0C4</color>
-    <color name="text_tertiary">#6E6E88</color>
-    <color name="text_inactive_lyric">#55556E</color>
+    <color name="text_primary">#111118</color>
+    <color name="text_secondary">#55556A</color>
+    <color name="text_tertiary">#88889C</color>
+    <color name="text_inactive_lyric">#78788C</color>
     
     <!-- Status / Overlay -->
-    <color name="overlay_scrim">#9908080C</color>
-    <color name="bottom_nav_scrim">#E608080C</color>
-    <color name="seekbar_track">#33FFFFFF</color>
-    <color name="seekbar_progress">#00F5D4</color>
+    <color name="overlay_scrim">#80000000</color>
+    <color name="bottom_nav_scrim">#E6F5F6FA</color>
+    <color name="seekbar_track">#33000000</color>
+    <color name="seekbar_progress">#009688</color>
     <color name="favorite_active">#FF3366</color>
 </resources>

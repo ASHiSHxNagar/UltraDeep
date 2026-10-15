@@ -17,9 +17,15 @@ import com.ultradeep.music.ui.adapter.PlaylistAdapter
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class AddToPlaylistBottomSheet(
-    private val song: Song
-) : BottomSheetDialogFragment() {
+class AddToPlaylistBottomSheet : BottomSheetDialogFragment {
+
+    private var song: Song? = null
+
+    constructor() : super()
+
+    constructor(song: Song) : super() {
+        this.song = song
+    }
 
     private var _binding: DialogAddToPlaylistBinding? = null
     private val binding get() = _binding!!
@@ -36,12 +42,17 @@ class AddToPlaylistBottomSheet(
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        val currentSong = song ?: run {
+            dismissAllowingStateLoss()
+            return
+        }
+
         val playlistDao = UltraDeepApplication.instance.database.playlistDao()
         val adapter = PlaylistAdapter(
             onPlaylistClicked = { playlist ->
                 viewLifecycleOwner.lifecycleScope.launch {
                     playlistDao.addSongToPlaylist(
-                        PlaylistSongCrossRef(playlistId = playlist.id, songId = song.id)
+                        PlaylistSongCrossRef(playlistId = playlist.id, songId = currentSong.id)
                     )
                     Toast.makeText(requireContext(), R.string.added_to_playlist, Toast.LENGTH_SHORT).show()
                     dismiss()

@@ -22,9 +22,15 @@ import com.ultradeep.music.util.BackupManager
 import com.ultradeep.music.util.FileUtil
 import kotlinx.coroutines.launch
 
-class SettingsBottomSheet(
-    private val onLibraryRescanned: () -> Unit
-) : BottomSheetDialogFragment() {
+class SettingsBottomSheet : BottomSheetDialogFragment {
+
+    private var onLibraryRescanned: (() -> Unit)? = null
+
+    constructor() : super()
+
+    constructor(onLibraryRescanned: () -> Unit) : super() {
+        this.onLibraryRescanned = onLibraryRescanned
+    }
 
     private var _binding: DialogSettingsBinding? = null
     private val binding get() = _binding!!
@@ -35,7 +41,7 @@ class SettingsBottomSheet(
             val success = FileUtil.copyUriToFile(requireContext(), uri, dest)
             if (success) {
                 updateDefaultArtUI()
-                onLibraryRescanned()
+                onLibraryRescanned?.invoke()
                 Toast.makeText(requireContext(), "Default artwork updated for all songs!", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(requireContext(), "Failed to save image", Toast.LENGTH_SHORT).show()
@@ -52,7 +58,7 @@ class SettingsBottomSheet(
                     if (jsonText.isNotBlank()) {
                         val result = BackupManager.restoreBackup(requireContext(), jsonText)
                         updateDefaultArtUI()
-                        onLibraryRescanned()
+                        onLibraryRescanned?.invoke()
                         Toast.makeText(
                             requireContext(),
                             "Backup restored! ${result.lyricsCount} lyrics, ${result.favoritesCount} favs, ${result.playlistsCount} playlists, ${result.artworksCount} arts.",
@@ -97,8 +103,14 @@ class SettingsBottomSheet(
                 R.id.rbThemeSystem -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
                 else -> AppCompatDelegate.MODE_NIGHT_YES
             }
-            prefs.edit().putInt("theme_mode", mode).apply()
-            AppCompatDelegate.setDefaultNightMode(mode)
+            val currentMode = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_YES)
+            if (currentMode != mode) {
+                prefs.edit().putInt("theme_mode", mode).apply()
+                dismissAllowingStateLoss()
+                view.post {
+                    AppCompatDelegate.setDefaultNightMode(mode)
+                }
+            }
         }
 
         // Setup Default Track Artwork
@@ -112,7 +124,7 @@ class SettingsBottomSheet(
             val file = ArtworkManager.getGlobalDefaultArtworkFile(requireContext())
             if (file.exists()) file.delete()
             updateDefaultArtUI()
-            onLibraryRescanned()
+            onLibraryRescanned?.invoke()
             Toast.makeText(requireContext(), "Reverted to Car Default Photo", Toast.LENGTH_SHORT).show()
         }
 

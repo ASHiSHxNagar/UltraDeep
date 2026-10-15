@@ -13,11 +13,23 @@ import com.ultradeep.music.data.model.Song
 import com.ultradeep.music.databinding.DialogEditLyricsBinding
 import kotlinx.coroutines.launch
 
-class EditLyricsBottomSheet(
-    private val song: Song,
-    private val initialContent: String,
-    private val onLyricsUpdated: () -> Unit
-) : BottomSheetDialogFragment() {
+class EditLyricsBottomSheet : BottomSheetDialogFragment {
+
+    private var song: Song? = null
+    private var initialContent: String = ""
+    private var onLyricsUpdated: (() -> Unit)? = null
+
+    constructor() : super()
+
+    constructor(
+        song: Song,
+        initialContent: String,
+        onLyricsUpdated: () -> Unit
+    ) : super() {
+        this.song = song
+        this.initialContent = initialContent
+        this.onLyricsUpdated = onLyricsUpdated
+    }
 
     private var _binding: DialogEditLyricsBinding? = null
     private val binding get() = _binding!!
@@ -34,7 +46,12 @@ class EditLyricsBottomSheet(
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.tvSongSubtitle.text = "${song.title} • ${song.artist}"
+        val currentSong = song ?: run {
+            dismissAllowingStateLoss()
+            return
+        }
+
+        binding.tvSongSubtitle.text = "${currentSong.title} • ${currentSong.artist}"
         binding.etLyricsContent.setText(initialContent)
 
         val repository = UltraDeepApplication.instance.lyricsRepository
@@ -67,18 +84,18 @@ class EditLyricsBottomSheet(
             }
 
             viewLifecycleOwner.lifecycleScope.launch {
-                repository.saveCustomLyrics(song, content)
+                repository.saveCustomLyrics(currentSong, content)
                 Toast.makeText(requireContext(), R.string.lyrics_saved, Toast.LENGTH_SHORT).show()
-                onLyricsUpdated()
+                onLyricsUpdated?.invoke()
                 dismiss()
             }
         }
 
         binding.btnResetLyrics.setOnClickListener {
             viewLifecycleOwner.lifecycleScope.launch {
-                repository.resetLyrics(song.id)
+                repository.resetLyrics(currentSong.id)
                 Toast.makeText(requireContext(), "Reset to automatic lyrics", Toast.LENGTH_SHORT).show()
-                onLyricsUpdated()
+                onLyricsUpdated?.invoke()
                 dismiss()
             }
         }

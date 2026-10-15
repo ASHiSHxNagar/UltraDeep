@@ -16,9 +16,15 @@ import com.ultradeep.music.ui.adapter.SongAdapter
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class PlaylistDetailBottomSheet(
-    private val playlist: PlaylistEntity
-) : BottomSheetDialogFragment() {
+class PlaylistDetailBottomSheet : BottomSheetDialogFragment {
+
+    private var playlist: PlaylistEntity? = null
+
+    constructor() : super()
+
+    constructor(playlist: PlaylistEntity) : super() {
+        this.playlist = playlist
+    }
 
     private var _binding: DialogPlaylistDetailBinding? = null
     private val binding get() = _binding!!
@@ -35,7 +41,12 @@ class PlaylistDetailBottomSheet(
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.tvPlaylistDetailName.text = playlist.name
+        val currentPlaylist = playlist ?: run {
+            dismissAllowingStateLoss()
+            return
+        }
+
+        binding.tvPlaylistDetailName.text = currentPlaylist.name
 
         val playlistDao = UltraDeepApplication.instance.database.playlistDao()
         val allSongs = MusicController.allSongs.value

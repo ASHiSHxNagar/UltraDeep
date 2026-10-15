@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- UltraDeep Dark / AMOLED Theme Palette -->
+    <color name="amoled_black">#08080C</color>
+    <color name="surface_dark">#101018</color>
+    <color name="surface_variant">#161622</color>
+    <color name="surface_card">#1B1B2A</color>
+    <color name="stroke_border">#28283C</color>
+    
+    <!-- Neon Cyan & Deep Violet Brand Colors -->
+    <color name="neon_cyan">#00F5D4</color>
+    <color name="neon_cyan_glow">#3300F5D4</color>
+    <color name="deep_violet">#7928CA</color>
+    <color name="deep_violet_glow">#4D7928CA</color>
+    <color name="electric_purple">#9D4EDD</color>
+    <color name="vibrant_magenta">#F72585</color>
+    
+    <!-- Typography Colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B0B0C4</color>
+    <color name="text_tertiary">#6E6E88</color>
+    <color name="text_inactive_lyric">#55556E</color>
+    
+    <!-- Status / Overlay -->
+    <color name="overlay_scrim">#9908080C</color>
+    <color name="bottom_nav_scrim">#E608080C</color>
+    <color name="seekbar_track">#33FFFFFF</color>
+    <color name="seekbar_progress">#00F5D4</color>
+    <color name="favorite_active">#FF3366</color>
+</resources>

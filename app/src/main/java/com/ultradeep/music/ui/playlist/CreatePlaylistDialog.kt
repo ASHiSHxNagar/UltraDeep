@@ -12,9 +12,15 @@ import com.ultradeep.music.data.db.entity.PlaylistEntity
 import com.ultradeep.music.databinding.DialogCreatePlaylistBinding
 import kotlinx.coroutines.launch
 
-class CreatePlaylistDialog(
-    private val onPlaylistCreated: () -> Unit
-) : BottomSheetDialogFragment() {
+class CreatePlaylistDialog : BottomSheetDialogFragment {
+
+    private var onPlaylistCreated: (() -> Unit)? = null
+
+    constructor() : super()
+
+    constructor(onPlaylistCreated: () -> Unit) : super() {
+        this.onPlaylistCreated = onPlaylistCreated
+    }
 
     private var _binding: DialogCreatePlaylistBinding? = null
     private val binding get() = _binding!!
@@ -41,7 +47,7 @@ class CreatePlaylistDialog(
             viewLifecycleOwner.lifecycleScope.launch {
                 val playlistDao = UltraDeepApplication.instance.database.playlistDao()
                 playlistDao.insertPlaylist(PlaylistEntity(name = name))
-                onPlaylistCreated()
+                onPlaylistCreated?.invoke()
                 dismiss()
             }
         }
