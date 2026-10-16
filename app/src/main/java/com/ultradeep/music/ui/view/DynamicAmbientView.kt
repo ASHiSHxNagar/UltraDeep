@@ -43,13 +43,13 @@ class DynamicAmbientView @JvmOverloads constructor(
 
     // Deep midnight obsidian base in dark mode; soft sleek porcelain in light mode
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor(if (isLightTheme) "#E8EAF2" else "#060714")
+        color = Color.parseColor(if (isLightTheme) "#EEF1F8" else "#060714")
         style = Paint.Style.FILL
     }
 
-    // Frosted dark scrim overlay for crisp lyrics & control readability without killing fluid bloom
+    // Frosted scrim overlay: delicate translucent tint for crisp lyrics & controls without dimming the glow
     private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor(if (isLightTheme) "#14FFFFFF" else "#1A050714")
+        color = Color.parseColor(if (isLightTheme) "#0D000000" else "#1A050714")
         style = Paint.Style.FILL
     }
 
@@ -358,54 +358,37 @@ class DynamicAmbientView @JvmOverloads constructor(
         // 2. Fast-paced, turbulent motion time axis
         val t = animTime * 0.0038f
 
-        // 3. Smooth color transition cycle: strictly every 3 seconds (3000ms)
-        val cycleMs = 3000f
-        val currentCycle = animTime / cycleMs
-        val currentBand = kotlin.math.floor(currentCycle).toInt()
-        val nextBand = currentBand + 1
-        val fraction = (currentCycle - currentBand).coerceIn(0f, 1f)
+        // 3. One single unified active color at a time, changing every 3 seconds to a new random RGB
+        val activeColor = getActiveFluidColor()
 
-        val colorFrom = shiftHue(baseColor1, (currentBand * 47f) % 360f)
-        val colorTo = shiftHue(baseColor1, (nextBand * 47f) % 360f)
-        val activeColor = argbEvaluator.evaluate(fraction, colorFrom, colorTo) as Int
+        val alpha = if (isLightTheme) 0.52f else 0.82f
+        val radius = (w.coerceAtLeast(h) * 0.90f).coerceAtLeast(540f)
 
-        val secondaryColorFrom = shiftHue(baseColor2, (currentBand * 47f + 60f) % 360f)
-        val secondaryColorTo = shiftHue(baseColor2, (nextBand * 47f + 60f) % 360f)
-        val secondaryColor = argbEvaluator.evaluate(fraction, secondaryColorFrom, secondaryColorTo) as Int
+        // ── 4. Broad Liquid Lightning Blobs (All using activeColor for unified single-color aesthetic) ─────
+        drawFluidBlob(canvas, w * (0.22f + 0.32f * sin(t * 1.55f)), h * (0.24f + 0.28f * cos(t * 1.35f)), radius * 1.05f, 1.35f, 0.75f, t * 35f, activeColor, alpha, 0)
+        drawFluidBlob(canvas, w * (0.78f + 0.30f * cos(t * 1.45f + 1.2f)), h * (0.38f + 0.28f * sin(t * 1.65f)), radius * 0.95f, 0.85f, 1.35f, -t * 30f, activeColor, alpha * 0.92f, 1)
+        drawFluidBlob(canvas, w * (0.42f + 0.35f * sin(t * 1.25f + 2.5f)), h * (0.80f + 0.24f * cos(t * 1.45f)), radius * 1.10f, 1.40f, 0.72f, t * 25f, activeColor, alpha * 0.88f, 2)
+        drawFluidBlob(canvas, w * (0.62f + 0.34f * cos(t * 1.65f + 3.8f)), h * (0.16f + 0.26f * sin(t * 1.55f)), radius * 0.88f, 0.90f, 1.25f, -t * 40f, activeColor, alpha * 0.84f, 3)
+        drawFluidBlob(canvas, w * (0.16f + 0.26f * cos(t * 1.85f + 0.8f)), h * (0.68f + 0.30f * sin(t * 1.35f)), radius * 0.92f, 1.25f, 0.78f, t * 45f, activeColor, alpha * 0.80f, 4)
+        drawFluidBlob(canvas, w * (0.50f + 0.26f * sin(t * 2.10f + 1.2f)), h * (0.50f + 0.26f * cos(t * 1.85f)), radius * 1.15f, 1.20f, 1.10f, t * 20f, activeColor, alpha * 0.75f, 5)
 
-        val tertiaryColorFrom = shiftHue(baseColor3, (currentBand * 47f + 120f) % 360f)
-        val tertiaryColorTo = shiftHue(baseColor3, (nextBand * 47f + 120f) % 360f)
-        val tertiaryColor = argbEvaluator.evaluate(fraction, tertiaryColorFrom, tertiaryColorTo) as Int
-
-        val alpha = if (isLightTheme) 0.44f else 0.76f
-        val radius = (w.coerceAtLeast(h) * 0.85f).coerceAtLeast(540f)
-
-        // ── 4. Broad, Fast-Paced Liquid Lightning Blobs (Sweeping Motion) ─────
-        drawFluidBlob(canvas, w * (0.22f + 0.32f * sin(t * 1.5f)), h * (0.24f + 0.28f * cos(t * 1.3f)), radius * 1.05f, 1.35f, 0.75f, t * 35f, activeColor, alpha, 0)
-        drawFluidBlob(canvas, w * (0.78f + 0.30f * cos(t * 1.4f + 1.2f)), h * (0.38f + 0.28f * sin(t * 1.6f)), radius * 0.95f, 0.85f, 1.35f, -t * 30f, secondaryColor, alpha * 0.90f, 1)
-        drawFluidBlob(canvas, w * (0.42f + 0.35f * sin(t * 1.2f + 2.5f)), h * (0.80f + 0.24f * cos(t * 1.4f)), radius * 1.10f, 1.40f, 0.72f, t * 25f, tertiaryColor, alpha * 0.85f, 2)
-        drawFluidBlob(canvas, w * (0.62f + 0.34f * cos(t * 1.6f + 3.8f)), h * (0.16f + 0.26f * sin(t * 1.5f)), radius * 0.88f, 0.90f, 1.25f, -t * 40f, activeColor, alpha * 0.80f, 3)
-        drawFluidBlob(canvas, w * (0.16f + 0.26f * cos(t * 1.8f + 0.8f)), h * (0.68f + 0.30f * sin(t * 1.3f)), radius * 0.92f, 1.25f, 0.78f, t * 45f, secondaryColor, alpha * 0.78f, 4)
-        drawFluidBlob(canvas, w * (0.50f + 0.26f * sin(t * 2.0f + 1.2f)), h * (0.50f + 0.26f * cos(t * 1.8f)), radius * 1.15f, 1.20f, 1.10f, t * 20f, tertiaryColor, alpha * 0.72f, 5)
-
-        // ── 5. Spreading Particle Effects (Diffusing Bokeh Sparks) ────────────
+        // ── 5. Spreading Particle Effects (Diffusing Bokeh Sparks using the active color) ────────────
         for (i in 0 until maxParticles) {
             val p = particles[i]
             if (!p.active) continue
             val pulse = 0.65f + 0.35f * sin(t * 2.5f + p.phase)
             val r = p.radius * pulse
-            val pAlpha = p.alpha * pulse * (if (isLightTheme) 0.50f else 0.85f)
+            val pAlpha = p.alpha * pulse * (if (isLightTheme) 0.55f else 0.88f)
             if (pAlpha <= 0.01f || r <= 0f) continue
 
-            val pColor = shiftHue(activeColor, p.hueOffset)
-            val centerColor = if (isLightTheme) pColor else Color.WHITE
+            val centerColor = if (isLightTheme) activeColor else Color.WHITE
 
             particlePaint.shader = RadialGradient(
                 p.x, p.y, r,
                 intArrayOf(
                     colorWithAlpha(centerColor, pAlpha),
-                    colorWithAlpha(pColor, pAlpha * 0.60f),
-                    colorWithAlpha(pColor, pAlpha * 0.20f),
+                    colorWithAlpha(activeColor, pAlpha * 0.65f),
+                    colorWithAlpha(activeColor, pAlpha * 0.22f),
                     Color.TRANSPARENT
                 ),
                 gradientStops,
@@ -424,9 +407,9 @@ class DynamicAmbientView @JvmOverloads constructor(
             touchSplatPaint.shader = RadialGradient(
                 splat.x, splat.y, splatR,
                 intArrayOf(
-                    colorWithAlpha(splatCenter, splat.alpha * (if (isLightTheme) 0.70f else 0.95f)),
-                    colorWithAlpha(splat.color, splat.alpha * (if (isLightTheme) 0.55f else 0.85f)),
-                    colorWithAlpha(splat.color, splat.alpha * (if (isLightTheme) 0.22f else 0.40f)),
+                    colorWithAlpha(splatCenter, splat.alpha * (if (isLightTheme) 0.75f else 0.95f)),
+                    colorWithAlpha(splat.color, splat.alpha * (if (isLightTheme) 0.60f else 0.85f)),
+                    colorWithAlpha(splat.color, splat.alpha * (if (isLightTheme) 0.25f else 0.40f)),
                     Color.TRANSPARENT
                 ),
                 gradientStops,
@@ -454,9 +437,9 @@ class DynamicAmbientView @JvmOverloads constructor(
         if (radius <= 0f) return
         val paint = fluidPaints[paintIndex % fluidPaints.size]
         val centerColor = if (isLightTheme) color else Color.WHITE
-        val centerAlpha = if (isLightTheme) alpha * 0.80f else alpha * 0.45f
-        val bodyAlpha = if (isLightTheme) alpha * 0.58f else alpha * 0.90f
-        val edgeAlpha = if (isLightTheme) alpha * 0.22f else alpha * 0.28f
+        val centerAlpha = if (isLightTheme) alpha * 0.85f else alpha * 0.50f
+        val bodyAlpha = if (isLightTheme) alpha * 0.65f else alpha * 0.92f
+        val edgeAlpha = if (isLightTheme) alpha * 0.25f else alpha * 0.30f
 
         paint.shader = RadialGradient(
             0f,
@@ -479,7 +462,76 @@ class DynamicAmbientView @JvmOverloads constructor(
         canvas.restore()
     }
 
-    // ── Color Utilities ──────────────────────────────────────────────────────
+    // ── Single-Color & 3-Second Random RGB System ────────────────────────────
+
+    /**
+     * Generates a vivid, vibrant random RGB color for a given 3-second step.
+     * With random variations across R, G, B, millions of rich color shades are produced.
+     * Ensures adequate luminescence so colors are never muddy, dark, or washed out.
+     */
+    private fun getRandomRgbColor(step: Long): Int {
+        var seed = step * 6364136223846793005L + 1442695040888963407L
+        seed = (seed xor (seed ushr 33)) * -49064778989728563L
+        seed = (seed xor (seed ushr 33)) * -4265267296055464877L
+        seed = seed xor (seed ushr 33)
+
+        var r = ((seed ushr 32) and 0xFF).toInt()
+        var g = ((seed ushr 16) and 0xFF).toInt()
+        var b = (seed and 0xFF).toInt()
+
+        // Ensure vibrant luminescence: avoid dull darkness
+        val maxChannel = maxOf(r, maxOf(g, b))
+        if (maxChannel < 150) {
+            val boost = 205f / maxOf(maxChannel, 1)
+            r = (r * boost).toInt().coerceIn(0, 255)
+            g = (g * boost).toInt().coerceIn(0, 255)
+            b = (b * boost).toInt().coerceIn(0, 255)
+        }
+
+        // Avoid muted monochrome gray by ensuring channel spread
+        val minChannel = minOf(r, minOf(g, b))
+        if (maxChannel - minChannel < 55) {
+            when {
+                r == maxChannel -> r = (r * 1.25f).toInt().coerceIn(0, 255)
+                g == maxChannel -> g = (g * 1.25f).toInt().coerceIn(0, 255)
+                else -> b = (b * 1.25f).toInt().coerceIn(0, 255)
+            }
+        }
+
+        return Color.rgb(r, g, b)
+    }
+
+    /**
+     * Strictly 3 seconds per cycle:
+     * - Animates in ONE steady random RGB color for ~2.1s
+     * - Smoothly cross-fades over ~0.9s into the next random RGB color
+     * - Keeps the entire screen unified in one cohesive color tone
+     */
+    private fun getActiveFluidColor(): Int {
+        val cycleMs = 3000f
+        val transitionMs = 900f
+        val holdMs = cycleMs - transitionMs
+
+        val step = (animTime / cycleMs).toLong()
+        val elapsed = animTime % cycleMs
+
+        val colorFrom = getRandomRgbColor(step)
+        val colorTo = getRandomRgbColor(step + 1)
+
+        val fraction = if (elapsed < holdMs) {
+            0f
+        } else {
+            val f = ((elapsed - holdMs) / transitionMs).coerceIn(0f, 1f)
+            // Smoothstep curve (cubic hermite) for ultra-smooth liquid color crossfade
+            f * f * (3f - 2f * f)
+        }
+
+        return argbEvaluator.evaluate(fraction, colorFrom, colorTo) as Int
+    }
+
+    private fun currentFluidColor(): Int {
+        return getActiveFluidColor()
+    }
 
     private fun blendColors(c1: Int, c2: Int): Int {
         return Color.rgb(
@@ -487,30 +539,6 @@ class DynamicAmbientView @JvmOverloads constructor(
             ((Color.green(c1) + Color.green(c2)) / 2).coerceIn(0, 255),
             ((Color.blue(c1) + Color.blue(c2)) / 2).coerceIn(0, 255)
         )
-    }
-
-    private fun shiftHue(color: Int, degreeOffset: Float): Int {
-        Color.colorToHSV(color, hsvBuffer)
-        var newHue = (hsvBuffer[0] + degreeOffset) % 360f
-        if (newHue < 0f) newHue += 360f
-        hsvBuffer[0] = newHue
-        hsvBuffer[1] = if (isLightTheme) hsvBuffer[1].coerceIn(0.65f, 0.95f)
-                       else              hsvBuffer[1].coerceAtLeast(0.85f)
-        hsvBuffer[2] = if (isLightTheme) hsvBuffer[2].coerceIn(0.70f, 0.95f)
-                       else              hsvBuffer[2].coerceAtLeast(0.95f)
-        return Color.HSVToColor(hsvBuffer)
-    }
-
-    private fun currentFluidColor(): Int {
-        val cycleMs = 3000f
-        val currentCycle = animTime / cycleMs
-        val currentBand = kotlin.math.floor(currentCycle).toInt()
-        val nextBand = currentBand + 1
-        val fraction = (currentCycle - currentBand).coerceIn(0f, 1f)
-
-        val colorFrom = shiftHue(baseColor1, (currentBand * 47f) % 360f)
-        val colorTo = shiftHue(baseColor1, (nextBand * 47f) % 360f)
-        return argbEvaluator.evaluate(fraction, colorFrom, colorTo) as Int
     }
 
     private fun colorWithAlpha(color: Int, alphaFloat: Float): Int {
