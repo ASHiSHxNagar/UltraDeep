@@ -164,14 +164,14 @@ class LyricsAdapter(
                 itemView.animate().translationY(0f).scaleX(1f).scaleY(1f).setDuration(240).start()
             } else {
                 tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_inactive_lyric))
-                tvLine.textSize = 22f
+                tvLine.textSize = 23f
                 tvLine.typeface = Typeface.create(ResourcesCompat.getFont(itemView.context, R.font.manrope_variable), Typeface.NORMAL)
                 // The lines immediately around the active lyric provide context, so they
                 // stay legible rather than fading into a dark artwork background.
                 val inactiveAlpha = when (distanceToActive) {
-                    1 -> 1.0f
-                    2 -> 0.93f
-                    else -> 0.84f
+                    1 -> 0.96f
+                    2 -> 0.88f
+                    else -> 0.76f
                 }
                 tvLine.alpha = inactiveAlpha
                 tvLine.scaleX = if (wasActive) 1f else 0.90f

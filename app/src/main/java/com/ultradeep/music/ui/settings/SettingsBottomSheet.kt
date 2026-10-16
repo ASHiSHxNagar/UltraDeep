@@ -109,10 +109,12 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
                     updateAutoBackupStatus()
                     val message = result.restored?.let {
                         "Recovered ${it.lyricsCount} lyrics, ${it.favoritesCount} favorites and ${it.playlistsCount} playlists."
-                    } ?: "Automatic backup folder saved."
+                    } ?: if (result.existingBackupProtected) {
+                        "Existing backup kept safe. Tap Restore automatic backup before updating it."
+                    } else "Automatic backup folder saved."
                     Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
-                    if (!result.written) {
-                        binding.tvAutoBackupStatus.text = "Folder selected, but backup write failed. Choose a writable folder."
+                    if (!result.written && !result.existingBackupProtected) {
+                        binding.tvAutoBackupStatus.text = "No local backup data yet, or the folder could not be written."
                     }
                 } catch (error: Exception) {
                     binding.tvAutoBackupStatus.text = "Could not use this folder: ${error.localizedMessage ?: "permission denied"}"
@@ -207,7 +209,7 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
                 updateAutoBackupStatus()
                 Toast.makeText(
                     requireContext(),
-                    if (saved) "Backup updated" else "Choose a writable backup folder first",
+                    if (saved) "Backup updated" else "Backup kept safe: restore existing data before replacing it",
                     Toast.LENGTH_SHORT
                 ).show()
             }

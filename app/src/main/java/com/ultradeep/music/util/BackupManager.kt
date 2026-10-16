@@ -33,7 +33,35 @@ object BackupManager {
     private const val AUTO_BACKUP_FILE_NAME = "UltraDeep_AutoBackup.json"
     private val autoBackupMutex = Mutex()
 
-    data class AutoBackupSetupResult(val restored: RestoreSummary?, val written: Boolean)
+    data class AutoBackupSetupResult(
+        val restored: RestoreSummary?,
+        val written: Boolean,
+        val existingBackupProtected: Boolean = false
+    )
+
+    private data class BackupContents(
+        val lyrics: Int,
+        val offsets: Int,
+        val favorites: Int,
+        val playlists: Int,
+        val playlistSongs: Int,
+        val artworks: Int,
+        val hasGlobalArtwork: Boolean
+    ) {
+        val isEmpty: Boolean
+            get() = lyrics == 0 && offsets == 0 && favorites == 0 && playlists == 0 &&
+                playlistSongs == 0 && artworks == 0 && !hasGlobalArtwork
+
+        /** A backup with data absent locally must be restored before it can be replaced. */
+        fun containsDataMissingFrom(local: BackupContents): Boolean =
+            lyrics > local.lyrics ||
+                offsets > local.offsets ||
+                favorites > local.favorites ||
+                playlists > local.playlists ||
+                playlistSongs > local.playlistSongs ||
+                artworks > local.artworks ||
+                (hasGlobalArtwork && !local.hasGlobalArtwork)
+    }
 
     fun hasAutoBackupFolder(context: Context): Boolean {
         val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
@@ -54,13 +82,20 @@ object BackupManager {
             .edit().putString(AUTO_BACKUP_TREE_URI, treeUri.toString()).commit()
 
         val existing = readAutoBackup(context, treeUri)
-        val restored = if (!existing.isNullOrBlank() && !hasLocalUserData(context)) {
+        val localHadData = hasLocalUserData(context)
+        val restored = if (!existing.isNullOrBlank() && !localHadData) {
             restoreBackup(context, existing)
         } else null
-        AutoBackupSetupResult(restored, updateAutoBackup(context))
+        val existingBackupProtected = restored == null && !existing.isNullOrBlank() &&
+            existingBackupHasDataMissingLocally(existing, context)
+        val written = if (existingBackupProtected) false else updateAutoBackup(context)
+        AutoBackupSetupResult(restored, written, existingBackupProtected)
     }
 
-    /** Rewrites one stable JSON file; safe to invoke both at app launch and when leaving it. */
+    /**
+     * Rewrites one stable JSON file only when it cannot discard data that is present in
+     * the existing backup. This runs at app launch and onStop, so it must be conservative.
+     */
     suspend fun updateAutoBackup(context: Context): Boolean = autoBackupMutex.withLock {
         withContext(Dispatchers.IO) {
             val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
@@ -83,7 +118,20 @@ object BackupManager {
 
     private suspend fun writeAutoBackup(context: Context, treeUri: Uri): Boolean {
         return try {
+            // Do not create an empty backup just because a new install opened once.
+            if (!hasLocalUserData(context)) return false
             val json = createBackupJson(context)
+            val existing = readAutoBackup(context, treeUri)
+            if (!existing.isNullOrBlank() && existingBackupHasDataMissingLocally(existing, context, json)) {
+                return false
+            }
+            // Preserve the previous valid state before replacing the stable file. This
+            // gives the user a recovery point even if a later backup is unwanted.
+            if (!existing.isNullOrBlank() && !sameBackupPayload(existing, json) &&
+                !archiveExistingAutoBackup(context, treeUri, existing)
+            ) {
+                return false
+            }
             val documentUri = findAutoBackupDocument(context, treeUri, create = true) ?: return false
             context.contentResolver.openOutputStream(documentUri, "wt")?.bufferedWriter()?.use { writer ->
                 writer.write(json)
@@ -129,6 +177,35 @@ object BackupManager {
         return DocumentsContract.createDocument(resolver, parentUri, "application/json", AUTO_BACKUP_FILE_NAME)
     }
 
+    private fun archiveExistingAutoBackup(context: Context, treeUri: Uri, contents: String): Boolean {
+        return try {
+            val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+            val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocumentId)
+            val archiveName = "UltraDeep_AutoBackup_${System.currentTimeMillis()}.json"
+            val archiveUri = DocumentsContract.createDocument(
+                context.contentResolver,
+                parentUri,
+                "application/json",
+                archiveName
+            ) ?: return false
+            context.contentResolver.openOutputStream(archiveUri, "wt")?.bufferedWriter()?.use { writer ->
+                writer.write(contents)
+            } != null
+        } catch (error: Exception) {
+            error.printStackTrace()
+            false
+        }
+    }
+
+    private fun sameBackupPayload(firstJson: String, secondJson: String): Boolean {
+        return try {
+            JSONObject(firstJson).apply { remove("timestamp") }.toString() ==
+                JSONObject(secondJson).apply { remove("timestamp") }.toString()
+        } catch (error: Exception) {
+            false
+        }
+    }
+
     private suspend fun hasLocalUserData(context: Context): Boolean {
         val db = UltraDeepApplication.instance.database
         if (db.lyricsDao().getAllLyrics().isNotEmpty() ||
@@ -141,6 +218,38 @@ object BackupManager {
         return context.getSharedPreferences("lyrics_timer_prefs", Context.MODE_PRIVATE)
             .all.keys.any { it.startsWith("lyrics_offset_") }
     }
+
+    private suspend fun existingBackupHasDataMissingLocally(
+        existingJson: String,
+        context: Context,
+        localJson: String? = null
+    ): Boolean {
+        return try {
+            val existingContents = backupContents(JSONObject(existingJson))
+            if (existingContents.isEmpty) return false
+            val localContents = backupContents(JSONObject(localJson ?: createBackupJson(context)))
+            existingContents.containsDataMissingFrom(localContents)
+        } catch (error: Exception) {
+            // A malformed existing file should not be replaced automatically either.
+            true
+        }
+    }
+
+    private fun backupContents(root: JSONObject): BackupContents = BackupContents(
+        lyrics = root.optJSONArray("lyrics")?.length() ?: 0,
+        offsets = root.optJSONObject("lyricsOffsets")?.length() ?: 0,
+        favorites = root.optJSONArray("favorites")?.length() ?: 0,
+        playlists = root.optJSONArray("playlists")?.length() ?: 0,
+        playlistSongs = root.optJSONArray("playlistSongs")?.length() ?: 0,
+        artworks = root.optJSONObject("customArtworks")?.length() ?: 0,
+        hasGlobalArtwork = root.opt("globalDefaultArtBase64")?.let { value ->
+            when (value) {
+                is Boolean -> value
+                is String -> value.isNotBlank()
+                else -> false
+            }
+        } ?: false
+    )
 
     suspend fun createBackupJson(context: Context): String = withContext(Dispatchers.IO) {
         val root = JSONObject()

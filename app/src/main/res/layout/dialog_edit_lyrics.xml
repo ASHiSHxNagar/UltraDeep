@@ -9,9 +9,11 @@
         <com.google.android.material.button.MaterialButton android:id="@+id/btnEditMode" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="wrap_content" android:layout_height="38dp" android:text="Edit" android:textColor="@color/neon_cyan" app:backgroundTint="@color/surface_variant" app:cornerRadius="10dp" />
     </LinearLayout>
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Tap Edit to change a timestamp or lyric. Each field scrolls horizontally; the list scrolls vertically." android:textColor="@color/text_secondary" android:textSize="12sp" />
-    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="10dp" android:background="@drawable/bg_lyrics_editor" android:fillViewport="true" android:overScrollMode="ifContentScrolls">
-        <LinearLayout android:id="@+id/lyricsRowsContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="10dp" />
-    </ScrollView>
+    <HorizontalScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="10dp" android:background="@drawable/bg_lyrics_editor" android:fillViewport="true" android:overScrollMode="ifContentScrolls" android:scrollbars="horizontal">
+        <ScrollView android:layout_width="wrap_content" android:layout_height="match_parent" android:fillViewport="true" android:overScrollMode="ifContentScrolls">
+            <LinearLayout android:id="@+id/lyricsRowsContainer" android:layout_width="680dp" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp" />
+        </ScrollView>
+    </HorizontalScrollView>
     <LinearLayout android:id="@+id/urlFetchContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center_vertical" android:orientation="horizontal" android:visibility="gone">
         <com.google.android.material.textfield.TextInputLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" app:boxBackgroundColor="@color/surface_variant" app:boxCornerRadiusBottomEnd="8dp" app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusTopEnd="8dp" app:boxCornerRadiusTopStart="8dp" app:hintTextColor="@color/text_secondary">
             <com.google.android.material.textfield.TextInputEditText android:id="@+id/etLrcUrl" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="LRC URL (optional)" android:inputType="textUri" android:paddingStart="16dp" android:paddingEnd="12dp" android:scrollHorizontally="true" android:scrollbars="horizontal" android:singleLine="true" android:textColor="@color/text_primary" android:textSize="13sp" />
