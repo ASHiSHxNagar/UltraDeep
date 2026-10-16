@@ -141,8 +141,8 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
         val prefs = requireContext().getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
         updateAutoBackupStatus()
 
-        // Setup Theme selection
-        val themeMode = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_YES)
+        // Setup Theme selection (defaults to system mode)
+        val themeMode = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         when (themeMode) {
             AppCompatDelegate.MODE_NIGHT_NO -> binding.rbThemeLight.isChecked = true
             AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM -> binding.rbThemeSystem.isChecked = true
@@ -155,7 +155,7 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
                 R.id.rbThemeSystem -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
                 else -> AppCompatDelegate.MODE_NIGHT_YES
             }
-            val currentMode = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_YES)
+            val currentMode = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
             if (currentMode != mode) {
                 prefs.edit().putInt("theme_mode", mode).apply()
                 // AppCompat recreates the active Activity as soon as the mode changes.

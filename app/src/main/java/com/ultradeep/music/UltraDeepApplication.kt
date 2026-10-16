@@ -26,9 +26,9 @@ class UltraDeepApplication : Application() {
         super.onCreate()
         instance = this
 
-        // Apply saved theme
+        // Apply saved theme (defaults to system mode)
         val prefs = getSharedPreferences("ultradeep_prefs", android.content.Context.MODE_PRIVATE)
-        val themeMode = prefs.getInt("theme_mode", androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+        val themeMode = prefs.getInt("theme_mode", androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(themeMode)
 
         // Initialize MusicController

@@ -115,6 +115,25 @@ class DynamicAmbientView @JvmOverloads constructor(
     private val splats = Array(maxSplats) { FluidSplat() }
     private var nextSplatIndex = 0
 
+    // ── Spreading Ambient Particle Sparks System ─────────────────────────────
+    private class AmbientParticle {
+        var x = 0f
+        var y = 0f
+        var vx = 0f
+        var vy = 0f
+        var radius = 0f
+        var alpha = 0f
+        var phase = 0f
+        var hueOffset = 0f
+        var active = false
+    }
+
+    private val maxParticles = 36
+    private val particles = Array(maxParticles) { AmbientParticle() }
+    private val particlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        xfermode = if (isLightTheme) null else screenBlend
+    }
+
     // Multi-touch tracking
     private val lastTouchX = FloatArray(10) { -1f }
     private val lastTouchY = FloatArray(10) { -1f }
@@ -292,6 +311,33 @@ class DynamicAmbientView @JvmOverloads constructor(
                 splat.active = false
             }
         }
+
+        // Update spreading ambient particles
+        val w = width.toFloat().coerceAtLeast(1f)
+        val h = height.toFloat().coerceAtLeast(1f)
+        val density = resources.displayMetrics.density
+
+        for (i in 0 until maxParticles) {
+            val p = particles[i]
+            if (!p.active || p.x < -80f || p.x > w + 80f || p.y < -80f || p.y > h + 80f) {
+                p.x = (Math.random() * w).toFloat()
+                p.y = (Math.random() * h).toFloat()
+                val speed = (1.2f + Math.random().toFloat() * 2.2f) * density
+                val angle = (Math.random() * Math.PI * 2).toFloat()
+                p.vx = cos(angle) * speed
+                p.vy = sin(angle) * speed
+                p.radius = (14f + Math.random().toFloat() * 32f) * density
+                p.alpha = 0.25f + Math.random().toFloat() * 0.50f
+                p.phase = (Math.random() * Math.PI * 2).toFloat()
+                p.hueOffset = (Math.random().toFloat() * 60f - 30f)
+                p.active = true
+            }
+
+            p.x += p.vx
+            p.y += p.vy
+            p.vx += (sin(animTime * 0.0025f + p.phase) * 0.08f).toFloat()
+            p.vy += (cos(animTime * 0.0025f + p.phase) * 0.08f).toFloat()
+        }
     }
 
     // ── Rendering Engine ─────────────────────────────────────────────────────
@@ -309,235 +355,66 @@ class DynamicAmbientView @JvmOverloads constructor(
         // 1. Solid deep background base
         canvas.drawRect(0f, 0f, w, h, backgroundPaint)
 
-        // Time axis - fast paced and turbulent
-        val t = animTime * 0.0055f
-        val hueCycle = (animTime * 0.09f) % 360f
+        // 2. Fast-paced, turbulent motion time axis
+        val t = animTime * 0.0038f
 
-        // 8 Vivid evolving fluid colors derived from track palette & high-energy spectrum
-        val c = arrayOf(
-            shiftHue(baseColor1, hueCycle),
-            shiftHue(baseColor2, hueCycle + 45f),
-            shiftHue(baseColor3, hueCycle + 90f),
-            shiftHue(baseColor1, hueCycle + 135f),
-            shiftHue(baseColor2, hueCycle + 180f),
-            shiftHue(baseColor3, hueCycle + 225f),
-            shiftHue(baseColor1, hueCycle + 270f),
-            shiftHue(baseColor2, hueCycle + 315f)
-        )
+        // 3. Smooth color transition cycle: strictly every 3 seconds (3000ms)
+        val cycleMs = 3000f
+        val currentCycle = animTime / cycleMs
+        val currentBand = kotlin.math.floor(currentCycle).toInt()
+        val nextBand = currentBand + 1
+        val fraction = (currentCycle - currentBand).coerceIn(0f, 1f)
 
-        val minDim = w.coerceAtLeast(h)
-        val density = resources.displayMetrics.density
+        val colorFrom = shiftHue(baseColor1, (currentBand * 47f) % 360f)
+        val colorTo = shiftHue(baseColor1, (nextBand * 47f) % 360f)
+        val activeColor = argbEvaluator.evaluate(fraction, colorFrom, colorTo) as Int
 
-        // ── 2. Fluid Curling Smoke Tendrils ───────────────────────────────────
-        val tendrilConfigs = arrayOf(
-            Triple(0f, h * 0.90f, c[0]),
-            Triple(w, h * 0.85f, c[2]),
-            Triple(0f, h * 0.15f, c[4]),
-            Triple(w, h * 0.20f, c[1]),
-            Triple(w * 0.40f, h, c[6]),
-            Triple(w * 0.60f, 0f, c[3])
-        )
+        val secondaryColorFrom = shiftHue(baseColor2, (currentBand * 47f + 60f) % 360f)
+        val secondaryColorTo = shiftHue(baseColor2, (nextBand * 47f + 60f) % 360f)
+        val secondaryColor = argbEvaluator.evaluate(fraction, secondaryColorFrom, secondaryColorTo) as Int
 
-        val strokeBase = 72f * density
-        tendrilConfigs.forEachIndexed { i, (startX, startY, color) ->
-            val path = tendrilPaths[i]
-            path.reset()
-            path.moveTo(startX, startY)
+        val tertiaryColorFrom = shiftHue(baseColor3, (currentBand * 47f + 120f) % 360f)
+        val tertiaryColorTo = shiftHue(baseColor3, (nextBand * 47f + 120f) % 360f)
+        val tertiaryColor = argbEvaluator.evaluate(fraction, tertiaryColorFrom, tertiaryColorTo) as Int
 
-            val p1x: Float
-            val p1y: Float
-            val p2x: Float
-            val p2y: Float
-            val endX: Float
-            val endY: Float
+        val alpha = if (isLightTheme) 0.44f else 0.76f
+        val radius = (w.coerceAtLeast(h) * 0.85f).coerceAtLeast(540f)
 
-            when (i) {
-                0 -> {
-                    p1x = w * (0.28f + 0.16f * sin(t * 1.6f + 0.2f))
-                    p1y = h * (0.65f + 0.12f * cos(t * 1.3f))
-                    p2x = w * (0.08f + 0.18f * cos(t * 1.8f + 1.2f))
-                    p2y = h * (0.40f + 0.15f * sin(t * 1.4f))
-                    endX = w * (0.22f + 0.14f * sin(t * 1.2f + 2.5f))
-                    endY = h * 0.10f
-                }
-                1 -> {
-                    p1x = w * (0.72f - 0.16f * cos(t * 1.5f + 0.8f))
-                    p1y = h * (0.60f + 0.14f * sin(t * 1.4f))
-                    p2x = w * (0.92f - 0.18f * sin(t * 1.7f + 1.6f))
-                    p2y = h * (0.35f + 0.12f * cos(t * 1.3f))
-                    endX = w * (0.78f - 0.14f * cos(t * 1.1f + 3.1f))
-                    endY = h * 0.08f
-                }
-                2 -> {
-                    p1x = w * (0.25f + 0.15f * sin(t * 1.4f + 1.8f))
-                    p1y = h * (0.18f + 0.10f * cos(t * 1.6f))
-                    p2x = w * (0.45f + 0.12f * cos(t * 1.3f + 0.4f))
-                    p2y = h * (0.32f + 0.12f * sin(t * 1.5f))
-                    endX = w * 0.65f
-                    endY = h * 0.22f
-                }
-                3 -> {
-                    p1x = w * (0.75f - 0.15f * cos(t * 1.5f + 2.2f))
-                    p1y = h * (0.20f + 0.10f * sin(t * 1.7f))
-                    p2x = w * (0.55f - 0.12f * sin(t * 1.2f + 1.0f))
-                    p2y = h * (0.36f + 0.12f * cos(t * 1.4f))
-                    endX = w * 0.35f
-                    endY = h * 0.28f
-                }
-                4 -> {
-                    p1x = w * (0.35f + 0.20f * sin(t * 1.3f + 3.5f))
-                    p1y = h * (0.80f - 0.10f * cos(t * 1.5f))
-                    p2x = w * (0.65f - 0.20f * cos(t * 1.4f + 2.0f))
-                    p2y = h * (0.65f - 0.12f * sin(t * 1.6f))
-                    endX = w * 0.50f
-                    endY = h * 0.48f
-                }
-                else -> {
-                    p1x = w * (0.55f + 0.22f * cos(t * 1.2f + 4.2f))
-                    p1y = h * (0.30f + 0.14f * sin(t * 1.5f))
-                    p2x = w * (0.45f - 0.22f * sin(t * 1.4f + 1.5f))
-                    p2y = h * (0.60f + 0.14f * cos(t * 1.3f))
-                    endX = w * 0.70f
-                    endY = h * 0.85f
-                }
-            }
+        // ── 4. Broad, Fast-Paced Liquid Lightning Blobs (Sweeping Motion) ─────
+        drawFluidBlob(canvas, w * (0.22f + 0.32f * sin(t * 1.5f)), h * (0.24f + 0.28f * cos(t * 1.3f)), radius * 1.05f, 1.35f, 0.75f, t * 35f, activeColor, alpha, 0)
+        drawFluidBlob(canvas, w * (0.78f + 0.30f * cos(t * 1.4f + 1.2f)), h * (0.38f + 0.28f * sin(t * 1.6f)), radius * 0.95f, 0.85f, 1.35f, -t * 30f, secondaryColor, alpha * 0.90f, 1)
+        drawFluidBlob(canvas, w * (0.42f + 0.35f * sin(t * 1.2f + 2.5f)), h * (0.80f + 0.24f * cos(t * 1.4f)), radius * 1.10f, 1.40f, 0.72f, t * 25f, tertiaryColor, alpha * 0.85f, 2)
+        drawFluidBlob(canvas, w * (0.62f + 0.34f * cos(t * 1.6f + 3.8f)), h * (0.16f + 0.26f * sin(t * 1.5f)), radius * 0.88f, 0.90f, 1.25f, -t * 40f, activeColor, alpha * 0.80f, 3)
+        drawFluidBlob(canvas, w * (0.16f + 0.26f * cos(t * 1.8f + 0.8f)), h * (0.68f + 0.30f * sin(t * 1.3f)), radius * 0.92f, 1.25f, 0.78f, t * 45f, secondaryColor, alpha * 0.78f, 4)
+        drawFluidBlob(canvas, w * (0.50f + 0.26f * sin(t * 2.0f + 1.2f)), h * (0.50f + 0.26f * cos(t * 1.8f)), radius * 1.15f, 1.20f, 1.10f, t * 20f, tertiaryColor, alpha * 0.72f, 5)
 
-            path.cubicTo(p1x, p1y, p2x, p2y, endX, endY)
+        // ── 5. Spreading Particle Effects (Diffusing Bokeh Sparks) ────────────
+        for (i in 0 until maxParticles) {
+            val p = particles[i]
+            if (!p.active) continue
+            val pulse = 0.65f + 0.35f * sin(t * 2.5f + p.phase)
+            val r = p.radius * pulse
+            val pAlpha = p.alpha * pulse * (if (isLightTheme) 0.50f else 0.85f)
+            if (pAlpha <= 0.01f || r <= 0f) continue
 
-            val paint = tendrilPaints[i]
-            paint.strokeWidth = strokeBase * (0.85f + 0.30f * sin(t * 1.2f + i.toFloat()))
-            val tendrilAlpha1 = if (isLightTheme) 0.38f else 0.65f
-            val tendrilAlpha2 = if (isLightTheme) 0.42f else 0.80f
-            val tendrilAlpha3 = if (isLightTheme) 0.18f else 0.40f
-            paint.shader = LinearGradient(
-                startX, startY, endX, endY,
+            val pColor = shiftHue(activeColor, p.hueOffset)
+            val centerColor = if (isLightTheme) pColor else Color.WHITE
+
+            particlePaint.shader = RadialGradient(
+                p.x, p.y, r,
                 intArrayOf(
-                    colorWithAlpha(color, tendrilAlpha1),
-                    colorWithAlpha(shiftHue(color, 45f), tendrilAlpha2),
-                    colorWithAlpha(shiftHue(color, 90f), tendrilAlpha3),
-                    Color.TRANSPARENT
-                ),
-                floatArrayOf(0f, 0.45f, 0.82f, 1f),
-                Shader.TileMode.CLAMP
-            )
-            canvas.drawPath(path, paint)
-        }
-
-        // ── 3. Rotating & Stretching Elliptical Vortices ───────────────────────
-        data class Vortex(
-            val cx: Float,
-            val cy: Float,
-            val r: Float,
-            val angle: Float,
-            val scaleX: Float,
-            val scaleY: Float,
-            val alpha: Float
-        )
-
-        val vortices = arrayOf(
-            Vortex(
-                cx = w * (0.50f + 0.50f * sin(t * 1.55f)),
-                cy = h * (0.50f + 0.48f * sin(t * 3.10f + 0.4f)),
-                r = (minDim * 0.95f).coerceAtLeast(460f),
-                angle = (t * 45f) % 360f,
-                scaleX = 1.35f + 0.25f * sin(t * 1.8f),
-                scaleY = 0.75f + 0.20f * cos(t * 1.5f),
-                alpha = if (isLightTheme) 0.46f else 0.85f
-            ),
-            Vortex(
-                cx = w * (0.52f + 0.52f * cos(t * 1.35f + 1.2f)),
-                cy = h * (0.48f + 0.52f * sin(t * 1.45f + 0.8f)),
-                r = (minDim * 0.90f).coerceAtLeast(440f),
-                angle = (-t * 38f + 45f) % 360f,
-                scaleX = 1.25f + 0.20f * cos(t * 1.4f),
-                scaleY = 0.80f + 0.20f * sin(t * 1.6f),
-                alpha = if (isLightTheme) 0.42f else 0.80f
-            ),
-            Vortex(
-                cx = w * (0.50f + 0.48f * sin(t * 1.85f + 2.5f) * cos(t * 0.7f)),
-                cy = h * (0.50f + 0.48f * cos(t * 1.85f + 2.5f)),
-                r = (minDim * 1.05f).coerceAtLeast(500f),
-                angle = (t * 52f + 120f) % 360f,
-                scaleX = 1.40f + 0.30f * sin(t * 2.1f),
-                scaleY = 0.70f + 0.15f * cos(t * 1.9f),
-                alpha = if (isLightTheme) 0.40f else 0.78f
-            ),
-            Vortex(
-                cx = w * (0.48f + 0.52f * cos(t * 1.20f + 3.2f)),
-                cy = h * (0.52f + 0.52f * sin(t * 1.60f + 3.8f)),
-                r = (minDim * 0.88f).coerceAtLeast(420f),
-                angle = (-t * 42f + 80f) % 360f,
-                scaleX = 1.30f + 0.25f * cos(t * 1.7f),
-                scaleY = 0.75f + 0.18f * sin(t * 1.3f),
-                alpha = if (isLightTheme) 0.42f else 0.82f
-            ),
-            Vortex(
-                cx = w * (0.50f + 0.52f * sin(t * 1.40f + 4.1f)),
-                cy = h * (0.50f + 0.52f * cos(t * 1.15f + 2.1f)),
-                r = (minDim * 0.92f).coerceAtLeast(450f),
-                angle = (t * 36f + 200f) % 360f,
-                scaleX = 1.20f + 0.20f * sin(t * 1.5f),
-                scaleY = 0.82f + 0.20f * cos(t * 1.7f),
-                alpha = if (isLightTheme) 0.38f else 0.76f
-            ),
-            Vortex(
-                cx = w * (0.50f + 0.42f * sin(t * 2.40f + 0.6f)),
-                cy = h * (0.50f + 0.42f * cos(t * 2.10f + 1.1f)),
-                r = (minDim * 0.75f).coerceAtLeast(380f),
-                angle = (-t * 60f) % 360f,
-                scaleX = 1.15f + 0.25f * cos(t * 2.2f),
-                scaleY = 0.85f + 0.15f * sin(t * 2.5f),
-                alpha = if (isLightTheme) 0.48f else 0.90f
-            ),
-            Vortex(
-                cx = w * (0.50f + 0.55f * cos(t * 0.95f + 5.2f)),
-                cy = h * (0.50f + 0.55f * sin(t * 0.85f + 1.4f)),
-                r = (minDim * 1.10f).coerceAtLeast(520f),
-                angle = (t * 28f + 310f) % 360f,
-                scaleX = 1.45f + 0.30f * sin(t * 1.1f),
-                scaleY = 0.65f + 0.18f * cos(t * 0.9f),
-                alpha = if (isLightTheme) 0.36f else 0.70f
-            ),
-            Vortex(
-                cx = w * (0.50f + 0.46f * sin(t * 2.80f + 1.8f)),
-                cy = h * (0.50f + 0.46f * sin(t * 1.90f + 4.2f)),
-                r = (minDim * 0.80f).coerceAtLeast(400f),
-                angle = (-t * 48f + 150f) % 360f,
-                scaleX = 1.28f + 0.22f * cos(t * 1.8f),
-                scaleY = 0.78f + 0.18f * sin(t * 2.0f),
-                alpha = if (isLightTheme) 0.38f else 0.75f
-            )
-        )
-
-        // Draw autonomous fluid vortices with smooth blending and elliptical rotation
-        vortices.forEachIndexed { i, vortex ->
-            val color = c[i]
-            val centerColor = if (isLightTheme) color else Color.WHITE
-            val centerAlpha = if (isLightTheme) vortex.alpha * 0.65f else vortex.alpha * 0.42f
-            val bodyAlpha = if (isLightTheme) vortex.alpha * 0.52f else vortex.alpha * 0.95f
-            val edgeAlpha = if (isLightTheme) vortex.alpha * 0.20f else vortex.alpha * 0.30f
-
-            fluidPaints[i].shader = RadialGradient(
-                0f, 0f, vortex.r,
-                intArrayOf(
-                    colorWithAlpha(centerColor, centerAlpha),
-                    colorWithAlpha(color, bodyAlpha),
-                    colorWithAlpha(color, edgeAlpha),
+                    colorWithAlpha(centerColor, pAlpha),
+                    colorWithAlpha(pColor, pAlpha * 0.60f),
+                    colorWithAlpha(pColor, pAlpha * 0.20f),
                     Color.TRANSPARENT
                 ),
                 gradientStops,
                 Shader.TileMode.CLAMP
             )
-
-            canvas.save()
-            canvas.translate(vortex.cx, vortex.cy)
-            canvas.rotate(vortex.angle)
-            canvas.scale(vortex.scaleX, vortex.scaleY)
-            canvas.drawCircle(0f, 0f, vortex.r, fluidPaints[i])
-            canvas.restore()
+            canvas.drawCircle(p.x, p.y, r, particlePaint)
         }
 
-        // ── 4. Interactive Touch & Cursor Fluid Splats ────────────────────────
+        // ── 6. Interactive Touch Splats ───────────────────────────────────────
         for (i in 0 until maxSplats) {
             val splat = splats[i]
             if (!splat.active || splat.alpha <= 0.01f) continue
@@ -558,8 +435,48 @@ class DynamicAmbientView @JvmOverloads constructor(
             canvas.drawCircle(splat.x, splat.y, splatR, touchSplatPaint)
         }
 
-        // ── 5. Frosted Dark Scrim ─────────────────────────────────────────────
+        // ── 7. Scrim Overlay ──────────────────────────────────────────────────
         canvas.drawRect(0f, 0f, w, h, scrimPaint)
+    }
+
+    private fun drawFluidBlob(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        radius: Float,
+        scaleX: Float,
+        scaleY: Float,
+        angle: Float,
+        color: Int,
+        alpha: Float,
+        paintIndex: Int
+    ) {
+        if (radius <= 0f) return
+        val paint = fluidPaints[paintIndex % fluidPaints.size]
+        val centerColor = if (isLightTheme) color else Color.WHITE
+        val centerAlpha = if (isLightTheme) alpha * 0.80f else alpha * 0.45f
+        val bodyAlpha = if (isLightTheme) alpha * 0.58f else alpha * 0.90f
+        val edgeAlpha = if (isLightTheme) alpha * 0.22f else alpha * 0.28f
+
+        paint.shader = RadialGradient(
+            0f,
+            0f,
+            radius,
+            intArrayOf(
+                colorWithAlpha(centerColor, centerAlpha),
+                colorWithAlpha(color, bodyAlpha),
+                colorWithAlpha(color, edgeAlpha),
+                Color.TRANSPARENT
+            ),
+            gradientStops,
+            Shader.TileMode.CLAMP
+        )
+        canvas.save()
+        canvas.translate(x, y)
+        canvas.rotate(angle)
+        canvas.scale(scaleX, scaleY)
+        canvas.drawCircle(0f, 0f, radius, paint)
+        canvas.restore()
     }
 
     // ── Color Utilities ──────────────────────────────────────────────────────
@@ -585,8 +502,15 @@ class DynamicAmbientView @JvmOverloads constructor(
     }
 
     private fun currentFluidColor(): Int {
-        val colourBand = kotlin.math.floor(animTime / 2_400f).toInt()
-        return shiftHue(baseColor1, (colourBand * 47f) % 360f)
+        val cycleMs = 3000f
+        val currentCycle = animTime / cycleMs
+        val currentBand = kotlin.math.floor(currentCycle).toInt()
+        val nextBand = currentBand + 1
+        val fraction = (currentCycle - currentBand).coerceIn(0f, 1f)
+
+        val colorFrom = shiftHue(baseColor1, (currentBand * 47f) % 360f)
+        val colorTo = shiftHue(baseColor1, (nextBand * 47f) % 360f)
+        return argbEvaluator.evaluate(fraction, colorFrom, colorTo) as Int
     }
 
     private fun colorWithAlpha(color: Int, alphaFloat: Float): Int {

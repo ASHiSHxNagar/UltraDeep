@@ -2,6 +2,7 @@ package com.ultradeep.music.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -53,6 +54,29 @@ class MainActivity : AppCompatActivity() {
     private var favoriteSongIds = setOf<Long>()
     private lateinit var miniPlayerAmbient: AmbientCardAnimator
 
+    private val chooseAutoBackupFolderLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            lifecycleScope.launch {
+                try {
+                    val result = BackupManager.selectAutoBackupFolder(this@MainActivity, uri)
+                    val message = result.restored?.let {
+                        "Auto-recovered ${it.lyricsCount} lyrics, ${it.favoritesCount} favorites, and ${it.playlistsCount} playlists from backup!"
+                    } ?: if (result.written) {
+                        "Default backup folder saved! Created: ${result.backupFolderName}"
+                    } else "Default backup folder configured."
+                    Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                    if (result.restored != null) {
+                        scanLocalAudio()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "Could not access selected folder: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -64,6 +88,7 @@ class MainActivity : AppCompatActivity() {
 
         if (audioGranted) {
             scanLocalAudio()
+            promptAutoBackupFolderIfNeeded()
         } else {
             binding.layoutEmpty.visibility = View.VISIBLE
             binding.tvEmptyMessage.text = getString(R.string.permission_rationale)
@@ -119,6 +144,22 @@ class MainActivity : AppCompatActivity() {
             permissionLauncher.launch(permissions.toTypedArray())
         } else {
             scanLocalAudio()
+            promptAutoBackupFolderIfNeeded()
+        }
+    }
+
+    private fun promptAutoBackupFolderIfNeeded() {
+        if (isFinishing || isDestroyed) return
+        if (!BackupManager.hasAutoBackupFolder(this)) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Select Default Backup Folder")
+                .setMessage("Please select a default folder for your automatic song backups, favorites, and synced lyrics. A new timestamped folder is saved on every launch so your data is never lost!")
+                .setPositiveButton("Choose Folder") { _, _ ->
+                    chooseAutoBackupFolderLauncher.launch(null)
+                }
+                .setNegativeButton("Later", null)
+                .setCancelable(true)
+                .show()
         }
     }
 
