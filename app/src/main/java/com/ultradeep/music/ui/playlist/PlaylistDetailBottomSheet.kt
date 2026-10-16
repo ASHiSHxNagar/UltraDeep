@@ -10,6 +10,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.data.db.entity.PlaylistEntity
 import com.ultradeep.music.data.model.Song
+import com.ultradeep.music.data.model.SystemPlaylist
 import com.ultradeep.music.databinding.DialogPlaylistDetailBinding
 import com.ultradeep.music.service.MusicController
 import com.ultradeep.music.ui.adapter.SongAdapter
@@ -51,6 +52,7 @@ class PlaylistDetailBottomSheet : BottomSheetDialogFragment {
         val playlistDao = UltraDeepApplication.instance.database.playlistDao()
         val allSongs = MusicController.allSongs.value
         val playlistSongs = mutableListOf<Song>()
+        val isLastPlayed = currentPlaylist.id == SystemPlaylist.LAST_PLAYED_ID
 
         val adapter = SongAdapter(
             onSongClicked = { song, queue ->
@@ -58,8 +60,10 @@ class PlaylistDetailBottomSheet : BottomSheetDialogFragment {
                 dismiss()
             },
             onSongMoreClicked = { song ->
-                viewLifecycleOwner.lifecycleScope.launch {
-                    playlistDao.removeSongFromPlaylist(currentPlaylist.id, song.id)
+                if (!isLastPlayed) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        playlistDao.removeSongFromPlaylist(currentPlaylist.id, song.id)
+                    }
                 }
             }
         )
@@ -68,10 +72,11 @@ class PlaylistDetailBottomSheet : BottomSheetDialogFragment {
         binding.rvPlaylistSongs.adapter = adapter
 
         viewLifecycleOwner.lifecycleScope.launch {
-            playlistDao.getSongIdsForPlaylist(currentPlaylist.id).collectLatest { songIds ->
-                val idSet = songIds.toSet()
+            val songIdsFlow = if (isLastPlayed) MusicController.recentSongIds else playlistDao.getSongIdsForPlaylist(currentPlaylist.id)
+            songIdsFlow.collectLatest { songIds ->
                 playlistSongs.clear()
-                playlistSongs.addAll(allSongs.filter { idSet.contains(it.id) })
+                // Preserve the order in which tracks were played, newest first.
+                playlistSongs.addAll(songIds.mapNotNull { id -> allSongs.firstOrNull { it.id == id } })
 
                 binding.tvPlaylistDetailCount.text = "${playlistSongs.size} tracks"
                 adapter.submitList(playlistSongs)

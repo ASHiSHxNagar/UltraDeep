@@ -65,7 +65,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="marquee"
-            android:fontFamily="sans-serif-medium"
+            android:fontFamily="@font/manrope_variable"
             android:marqueeRepeatLimit="marquee_forever"
             android:singleLine="true"
             android:text="@string/unknown_title"

@@ -99,6 +99,9 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
 
     private fun addRow(timestamp: String, lyricText: String) {
         val context = requireContext()
+        val density = resources.displayMetrics.density
+        val horizontalStartPadding = (16 * density).toInt()
+        val horizontalEndPadding = (12 * density).toInt()
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -117,7 +120,7 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
             setTextColor(ContextCompat.getColor(context, R.color.text_primary))
             setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
             background = ContextCompat.getDrawable(context, R.drawable.bg_lyrics_editor)
-            setPadding(16, 0, 12, 0)
+            setPadding(horizontalStartPadding, 0, horizontalEndPadding, 0)
             layoutParams = LinearLayout.LayoutParams((126 * resources.displayMetrics.density).toInt(), (48 * resources.displayMetrics.density).toInt())
         }
         val lyric = EditText(context).apply {
@@ -132,7 +135,7 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
             setTextColor(ContextCompat.getColor(context, R.color.text_primary))
             setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
             background = ContextCompat.getDrawable(context, R.drawable.bg_lyrics_editor)
-            setPadding(16, 0, 12, 0)
+            setPadding(horizontalStartPadding, 0, horizontalEndPadding, 0)
             layoutParams = LinearLayout.LayoutParams(0, (48 * resources.displayMetrics.density).toInt(), 1f).apply {
                 marginStart = (7 * resources.displayMetrics.density).toInt()
             }

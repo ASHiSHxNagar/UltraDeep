@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
@@ -151,8 +152,8 @@ class LyricsAdapter(
                 // The active line rises into focus; the former current line shrinks away
                 // on its next bind, echoing the compact Spotify-style lyric motion.
                 tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_primary))
-                tvLine.textSize = 26f
-                tvLine.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD))
+                tvLine.textSize = 28f
+                tvLine.typeface = Typeface.create(ResourcesCompat.getFont(itemView.context, R.font.manrope_variable), Typeface.BOLD)
                 tvLine.alpha = 1.0f
                 tvLine.scaleX = 0.86f
                 tvLine.scaleY = 0.86f
@@ -163,14 +164,14 @@ class LyricsAdapter(
                 itemView.animate().translationY(0f).scaleX(1f).scaleY(1f).setDuration(240).start()
             } else {
                 tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_inactive_lyric))
-                tvLine.textSize = 20f
-                tvLine.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+                tvLine.textSize = 22f
+                tvLine.typeface = Typeface.create(ResourcesCompat.getFont(itemView.context, R.font.manrope_variable), Typeface.NORMAL)
                 // The lines immediately around the active lyric provide context, so they
                 // stay legible rather than fading into a dark artwork background.
                 val inactiveAlpha = when (distanceToActive) {
-                    1 -> 0.94f
-                    2 -> 0.84f
-                    else -> 0.72f
+                    1 -> 1.0f
+                    2 -> 0.93f
+                    else -> 0.84f
                 }
                 tvLine.alpha = inactiveAlpha
                 tvLine.scaleX = if (wasActive) 1f else 0.90f

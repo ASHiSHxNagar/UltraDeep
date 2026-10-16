@@ -20,6 +20,8 @@ import com.ultradeep.music.R
 import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.data.model.Song
 import com.ultradeep.music.data.model.SortOption
+import com.ultradeep.music.data.model.SystemPlaylist
+import com.ultradeep.music.data.db.entity.PlaylistEntity
 import com.ultradeep.music.databinding.ActivityMainBinding
 import com.ultradeep.music.scanner.AudioScanner
 import com.ultradeep.music.service.MusicController
@@ -33,6 +35,7 @@ import com.ultradeep.music.ui.view.AmbientCardAnimator
 import com.ultradeep.music.util.BackupManager
 import com.ultradeep.music.util.PaletteUtil
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -163,7 +166,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
-            playlistDao.getAllPlaylists().collectLatest { playlists ->
+            combine(playlistDao.getAllPlaylists(), MusicController.recentSongIds) { savedPlaylists, recentIds ->
+                val lastPlayed = PlaylistEntity(
+                    id = SystemPlaylist.LAST_PLAYED_ID,
+                    name = getString(R.string.playlist_last_played),
+                    createdAt = Long.MAX_VALUE
+                )
+                recentIds to (listOf(lastPlayed) + savedPlaylists)
+            }.collectLatest { (recentIds, playlists) ->
+                playlistAdapter.setSystemPlaylistTrackCount(recentIds.size)
                 playlistAdapter.submitList(playlists)
             }
         }

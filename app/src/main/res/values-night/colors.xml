@@ -20,7 +20,7 @@
     <color name="text_secondary">#B0B0C4</color>
     <color name="text_tertiary">#6E6E88</color>
     <!-- Keep surrounding lyric lines readable over artwork-derived ambient backgrounds. -->
-    <color name="text_inactive_lyric">#B8B8CD</color>
+    <color name="text_inactive_lyric">#D8D8E8</color>
     
     <!-- Status / Overlay -->
     <color name="overlay_scrim">#9908080C</color>

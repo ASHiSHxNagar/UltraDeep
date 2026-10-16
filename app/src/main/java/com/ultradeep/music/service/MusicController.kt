@@ -12,6 +12,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.ultradeep.music.data.model.Song
+import com.ultradeep.music.data.model.SystemPlaylist
 import com.ultradeep.music.util.ArtworkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +35,10 @@ object MusicController {
     // Library & Queue State
     private val _allSongs = MutableStateFlow<List<Song>>(emptyList())
     val allSongs: StateFlow<List<Song>> = _allSongs.asStateFlow()
+
+    private val _recentSongIds = MutableStateFlow<List<Long>>(emptyList())
+    /** Most-recent first. Kept separately from saved playlists because it is automatic. */
+    val recentSongIds: StateFlow<List<Long>> = _recentSongIds.asStateFlow()
 
     private val _queue = MutableStateFlow<List<Song>>(emptyList())
     val queue: StateFlow<List<Song>> = _queue.asStateFlow()
@@ -63,6 +68,7 @@ object MusicController {
     fun init(context: Context) {
         if (controllerFuture != null) return
         appContext = context.applicationContext
+        loadRecentSongs()
 
         val sessionToken = SessionToken(
             context,
@@ -148,6 +154,27 @@ object MusicController {
             ?.apply()
     }
 
+    private fun loadRecentSongs() {
+        val rawIds = appContext
+            ?.getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)
+            ?.getString("recently_played_song_ids", "")
+            .orEmpty()
+        _recentSongIds.value = rawIds
+            .split(',')
+            .mapNotNull { it.toLongOrNull() }
+            .distinct()
+            .take(SystemPlaylist.MAX_LAST_PLAYED_TRACKS)
+    }
+
+    private fun recordRecentlyPlayed(songId: Long) {
+        val updatedIds = (listOf(songId) + _recentSongIds.value.filterNot { it == songId })
+            .take(SystemPlaylist.MAX_LAST_PLAYED_TRACKS)
+        _recentSongIds.value = updatedIds
+        appContext?.getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)?.edit()
+            ?.putString("recently_played_song_ids", updatedIds.joinToString(","))
+            ?.apply()
+    }
+
     fun restoreLastPlayedSong(song: Song) {
         if (_currentSong.value != null) return
         _currentSong.value = song
@@ -173,6 +200,7 @@ object MusicController {
         val index = _queue.value.indexOfFirst { it.id == song.id }
         _currentIndex.value = if (index >= 0) index else 0
         _currentSong.value = song
+        recordRecentlyPlayed(song.id)
 
         // Save last played song id to SharedPreferences
         appContext?.getSharedPreferences("ultradeep_prefs", Context.MODE_PRIVATE)?.edit()

@@ -57,6 +57,7 @@
     <string name="playlist_name_hint">Playlist Name</string>
     <string name="add_to_playlist">Add to Playlist</string>
     <string name="playlist_created">Playlist created</string>
+    <string name="playlist_last_played">Last played</string>
     <string name="added_to_playlist">Added to playlist</string>
     <string name="search_hint">Search songs, artists, albums…</string>
 </resources>

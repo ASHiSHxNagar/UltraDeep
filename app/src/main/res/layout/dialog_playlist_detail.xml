@@ -32,7 +32,7 @@
                 android:id="@+id/tvPlaylistDetailName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-bold"
+                android:fontFamily="@font/manrope_variable"
                 android:text="Playlist Name"
                 android:textColor="@color/text_primary"
                 android:textSize="22sp" />
