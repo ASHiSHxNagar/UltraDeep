@@ -42,8 +42,6 @@ class LyricsAdapter(
         return cachedTypeface ?: Typeface.DEFAULT_BOLD
     }
 
-    private data class StyleConfig(val alpha: Float, val scale: Float)
-
     fun submitLines(newLines: List<LyricLine>, recyclerView: RecyclerView? = null) {
         val updateBlock = {
             lines.clear()
@@ -225,49 +223,39 @@ class LyricsAdapter(
             tvLine.text = formatWithWordGap(line.text)
             tvLine.typeface = getTypeface(ctx)
             tvLine.setTextColor(primaryTextColor)
-            tvLine.letterSpacing = 0.015f
-            tvLine.pivotX = 0f
-            tvLine.pivotY = if (tvLine.height > 0) tvLine.height / 2f else 0f
+            tvLine.letterSpacing = 0.01f
+            tvLine.scaleX = 1.0f
+            tvLine.scaleY = 1.0f
 
             if (isActive) {
-                // ── Spotify Active Line: Noticeably larger, bold pop-in ─────────────
+                // ── Spotify Active Line: 100% solid opacity pop-in ─────────────
                 if (animate && !wasActive) {
                     tvLine.animate().cancel()
-                    tvLine.scaleX = 0.95f
-                    tvLine.scaleY = 0.95f
-                    tvLine.alpha = 0.85f
+                    tvLine.alpha = 0.80f
                     tvLine.animate()
-                        .scaleX(1.22f)
-                        .scaleY(1.22f)
                         .alpha(1.0f)
                         .setInterpolator(DecelerateInterpolator(1.4f))
-                        .setDuration(240)
+                        .setDuration(200)
                         .start()
                 } else {
-                    tvLine.scaleX = 1.22f
-                    tvLine.scaleY = 1.22f
                     tvLine.alpha = 1.0f
                 }
             } else {
-                // ── Spotify Inactive Lines (Past & Future): Distinctly smaller with proximity fade ────
-                val style = when (distanceToActive) {
-                    1    -> StyleConfig(alpha = if (isDarkTheme) 0.54f else 0.56f, scale = 0.88f)
-                    2    -> StyleConfig(alpha = if (isDarkTheme) 0.38f else 0.40f, scale = 0.82f)
-                    else -> StyleConfig(alpha = if (isDarkTheme) 0.24f else 0.26f, scale = 0.78f)
+                // ── Spotify Inactive Lines: Smooth proximity opacity fade ────
+                val targetAlpha = when (distanceToActive) {
+                    1    -> if (isDarkTheme) 0.60f else 0.62f
+                    2    -> if (isDarkTheme) 0.42f else 0.44f
+                    else -> if (isDarkTheme) 0.26f else 0.28f
                 }
 
                 if (animate && wasActive) {
                     tvLine.animate().cancel()
                     tvLine.animate()
-                        .scaleX(style.scale)
-                        .scaleY(style.scale)
-                        .alpha(style.alpha)
-                        .setDuration(220)
+                        .alpha(targetAlpha)
+                        .setDuration(200)
                         .start()
                 } else {
-                    tvLine.scaleX = style.scale
-                    tvLine.scaleY = style.scale
-                    tvLine.alpha = style.alpha
+                    tvLine.alpha = targetAlpha
                 }
             }
             wasActive = isActive
