@@ -23,6 +23,9 @@ class LyricsAdapter(
     private var activeIndex = -1
     private var isUserScrolling = false
 
+    // Must live at adapter scope – Kotlin forbids data classes inside inner classes
+    private data class Quad(val size: Float, val alpha: Float, val scaleX: Float, val scaleY: Float)
+
     fun submitLines(newLines: List<LyricLine>) {
         lines.clear()
         lines.addAll(newLines)
@@ -206,7 +209,5 @@ class LyricsAdapter(
             wasActive = isActive
         }
 
-        // Simple data holder to avoid destructuring 4+ Pair nesting
-        private data class Quad(val size: Float, val alpha: Float, val scaleX: Float, val scaleY: Float)
     }
 }
