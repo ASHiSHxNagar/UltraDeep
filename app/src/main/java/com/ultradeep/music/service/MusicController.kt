@@ -62,6 +62,10 @@ object MusicController {
     val isShuffle: StateFlow<Boolean> = _isShuffle.asStateFlow()
     val shuffleMode: StateFlow<Boolean> get() = isShuffle
 
+    // History stack for backwards navigation in shuffle mode
+    private val shuffleHistory = ArrayDeque<Long>()
+    private var isNavigatingHistory = false
+
     private val _repeatMode = MutableStateFlow(Player.REPEAT_MODE_OFF)
     val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
@@ -196,6 +200,19 @@ object MusicController {
 
     fun playSong(song: Song, newQueue: List<Song> = _queue.value) {
         val player = mediaController ?: return
+
+        // Push previous song into shuffleHistory so Previous button can walk backwards
+        if (!isNavigatingHistory) {
+            _currentSong.value?.let { current ->
+                if (current.id != song.id) {
+                    shuffleHistory.addLast(current.id)
+                    if (shuffleHistory.size > 100) {
+                        shuffleHistory.removeFirst()
+                    }
+                }
+            }
+        }
+
         _queue.value = if (newQueue.isNotEmpty()) newQueue else listOf(song)
         val index = _queue.value.indexOfFirst { it.id == song.id }
         _currentIndex.value = if (index >= 0) index else 0
@@ -315,6 +332,22 @@ object MusicController {
         val currentQueue = _queue.value
         if (currentQueue.isEmpty()) return
 
+        // In shuffle mode, walk backwards through played history
+        if (_isShuffle.value && shuffleHistory.isNotEmpty()) {
+            val prevSongId = shuffleHistory.removeLast()
+            val prevSong = currentQueue.find { it.id == prevSongId }
+                ?: _allSongs.value.find { it.id == prevSongId }
+            if (prevSong != null) {
+                isNavigatingHistory = true
+                try {
+                    playSong(prevSong, currentQueue)
+                } finally {
+                    isNavigatingHistory = false
+                }
+                return
+            }
+        }
+
         val prevIndex = if (_currentIndex.value - 1 < 0) {
             if (_repeatMode.value == Player.REPEAT_MODE_ALL) currentQueue.size - 1 else 0
         } else {
@@ -330,6 +363,9 @@ object MusicController {
 
     fun toggleShuffle() {
         _isShuffle.value = !_isShuffle.value
+        if (!_isShuffle.value) {
+            shuffleHistory.clear()
+        }
     }
 
     fun toggleRepeat() {

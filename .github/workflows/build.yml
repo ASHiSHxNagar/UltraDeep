@@ -25,20 +25,19 @@ jobs:
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
-      # Keep the same debug certificate across clean GitHub runners. Android rejects
-      # an in-place update when two APKs use different signing certificates.
-      - name: Restore stable debug signing key
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: ultradeep-debug-signing-key-v1
-
-      - name: Build Debug APK with Gradle
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Build APKs with Gradle
+        run: ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
 
       - name: Upload UltraDeep Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: UltraDeep-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Upload UltraDeep Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UltraDeep-Release-APK
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 14

@@ -42,7 +42,7 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
 
     private var _binding: DialogEditLyricsBinding? = null
     private val binding get() = _binding!!
-    private data class RowViews(val time: EditText, val lyric: EditText)
+    private data class RowViews(val time: EditText, val lyric: EditText, var baselineMs: Long? = null)
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog =
         (super.onCreateDialog(savedInstanceState) as BottomSheetDialog).apply {
@@ -73,6 +73,14 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
         binding.btnEditMode.setOnClickListener { setEditing(true) }
         binding.btnAddLyricLine.setOnClickListener { addRow("", "") }
         binding.btnPasteLyrics.setOnClickListener { showPasteLyricsDialog() }
+        binding.btnApplyTimeShift.setOnClickListener {
+            val count = applyTimeShift()
+            if (count > 0) {
+                Toast.makeText(requireContext(), "Updated timestamps for $count lines", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(requireContext(), "No timestamp changes detected", Toast.LENGTH_SHORT).show()
+            }
+        }
         binding.btnCancelEdit.setOnClickListener {
             populateRows(initialContent)
             setEditing(false)
@@ -144,7 +152,8 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
         }
         row.addView(time); row.addView(lyric)
         binding.lyricsRowsContainer.addView(row)
-        rows += RowViews(time, lyric)
+        val parsedMs = parseTimestamp(timestamp)
+        rows += RowViews(time, lyric, baselineMs = parsedMs)
     }
 
     private fun setEditing(enabled: Boolean) {
@@ -160,6 +169,7 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
             }
         }
         binding.btnEditMode.visibility = if (enabled) View.GONE else View.VISIBLE
+        binding.autoShiftContainer.visibility = if (enabled) View.VISIBLE else View.GONE
         binding.editActions.visibility = if (enabled) View.VISIBLE else View.GONE
         binding.btnAddLyricLine.visibility = if (enabled) View.VISIBLE else View.GONE
         binding.btnPasteLyrics.visibility = if (enabled) View.VISIBLE else View.GONE
@@ -278,7 +288,51 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
         }
     }
 
+    private fun applyTimeShift(): Int {
+        var activeShiftMs: Long? = null
+        var updatedCount = 0
+
+        if (!binding.cbAutoTimeShift.isChecked) {
+            rows.forEach { row ->
+                val curr = parseTimestamp(row.time.text.toString())
+                if (curr != row.baselineMs) {
+                    row.baselineMs = curr
+                    updatedCount++
+                }
+            }
+            return updatedCount
+        }
+
+        for (row in rows) {
+            val currentParsed = parseTimestamp(row.time.text.toString())
+            val oldBaseline = row.baselineMs
+
+            if (oldBaseline != null && currentParsed != null) {
+                if (currentParsed != oldBaseline) {
+                    activeShiftMs = currentParsed - oldBaseline
+                    row.baselineMs = currentParsed
+                    updatedCount++
+                } else if (activeShiftMs != null && activeShiftMs != 0L) {
+                    val shiftedMs = maxOf(0L, oldBaseline + activeShiftMs)
+                    row.time.setText(formatTimestamp(shiftedMs))
+                    row.baselineMs = shiftedMs
+                    updatedCount++
+                }
+            } else if (oldBaseline == null && currentParsed != null) {
+                row.baselineMs = currentParsed
+                updatedCount++
+            } else if (oldBaseline != null && currentParsed == null) {
+                row.baselineMs = null
+                updatedCount++
+            }
+        }
+        return updatedCount
+    }
+
     private fun saveRows(currentSong: Song) {
+        if (binding.cbAutoTimeShift.isChecked) {
+            applyTimeShift()
+        }
         val output = buildString {
             rows.forEach { (time, lyric) ->
                 val text = lyric.text.toString().trim()

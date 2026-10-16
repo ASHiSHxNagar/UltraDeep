@@ -34,11 +34,13 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
             return@withContext LrcParser.parse(cached.lrcContent, cached.isCustom)
         }
 
-        // Fetch from LRCLIB API
+        // Multi-tier lyric fetching pipeline: LRCLIB -> JioSaavn (Hindi/Bhojpuri/Gujarati/etc.) -> Lyrics.ovh -> ChartLyrics
         try {
             val durationSec = song.duration / 1000
             val sanitized = com.ultradeep.music.util.TrackNameSanitizer.sanitize(song.title, song.artist)
+            val candidateQueries = com.ultradeep.music.util.TrackNameSanitizer.generateSearchQueries(song.title, song.artist)
 
+            // Tier 1: Try LRCLIB exact match
             var response = ApiClient.lrcLibService.getLyrics(
                 trackName = sanitized.title,
                 artistName = if (sanitized.artist != "Unknown Artist") sanitized.artist else "",
@@ -59,7 +61,6 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
                 val rawLyrics = body.syncedLyrics ?: body.plainLyrics ?: ""
                 val isSynced = !body.syncedLyrics.isNullOrEmpty()
 
-                // Cache in Room DB
                 lyricsDao.insertLyrics(
                     LyricsEntity(
                         songId = song.id,
@@ -78,51 +79,67 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
                 }
 
                 return@withContext LrcParser.parse(rawLyrics, false)
-            } else {
-                // Try smart search with sanitized query (e.g. "Jessie J Price Tag")
-                var searchResponse = ApiClient.lrcLibService.searchLyrics(sanitized.searchQuery)
-                if (!searchResponse.isSuccessful || searchResponse.body().isNullOrEmpty()) {
-                    if (sanitized.title.isNotBlank() && sanitized.title != sanitized.searchQuery) {
-                        searchResponse = ApiClient.lrcLibService.searchLyrics(sanitized.title)
+            }
+
+            // Tier 2: Try LRCLIB search with candidate queries
+            for (query in candidateQueries) {
+                try {
+                    val searchResponse = ApiClient.lrcLibService.searchLyrics(query)
+                    if (searchResponse.isSuccessful && !searchResponse.body().isNullOrEmpty()) {
+                        val list = searchResponse.body()!!
+                        val best = list.maxByOrNull { candidate ->
+                            scoreCandidate(candidate, sanitized.title, sanitized.artist, durationSec)
+                        } ?: list.first()
+
+                        val isInstrumental = best.instrumental == true
+                        val rawLyrics = best.syncedLyrics ?: best.plainLyrics ?: ""
+                        val isSynced = !best.syncedLyrics.isNullOrEmpty()
+
+                        if (rawLyrics.isNotBlank() || isInstrumental) {
+                            lyricsDao.insertLyrics(
+                                LyricsEntity(
+                                    songId = song.id,
+                                    title = song.title,
+                                    artist = song.artist,
+                                    durationSec = durationSec,
+                                    lrcContent = rawLyrics,
+                                    isSynced = isSynced,
+                                    isCustom = false,
+                                    isInstrumental = isInstrumental
+                                )
+                            )
+
+                            if (isInstrumental) {
+                                return@withContext LrcResult(emptyList(), false, "", isCustom = false, isInstrumental = true)
+                            }
+
+                            return@withContext LrcParser.parse(rawLyrics, false)
+                        }
                     }
-                }
-                if (!searchResponse.isSuccessful || searchResponse.body().isNullOrEmpty()) {
-                    searchResponse = ApiClient.lrcLibService.searchLyrics("${song.title} ${song.artist}".trim())
-                }
-
-                if (searchResponse.isSuccessful && !searchResponse.body().isNullOrEmpty()) {
-                    val list = searchResponse.body()!!
-                    // Search can return covers/live edits. Score title, artist and duration,
-                    // while still strongly preferring synchronized LRC.
-                    val best = list.maxByOrNull { candidate ->
-                        scoreCandidate(candidate, sanitized.title, sanitized.artist, durationSec)
-                    } ?: list.first()
-                    val isInstrumental = best.instrumental == true
-                    val rawLyrics = best.syncedLyrics ?: best.plainLyrics ?: ""
-                    val isSynced = !best.syncedLyrics.isNullOrEmpty()
-
-                    lyricsDao.insertLyrics(
-                        LyricsEntity(
-                            songId = song.id,
-                            title = song.title,
-                            artist = song.artist,
-                            durationSec = durationSec,
-                            lrcContent = rawLyrics,
-                            isSynced = isSynced,
-                            isCustom = false,
-                            isInstrumental = isInstrumental
-                        )
-                    )
-
-                    if (isInstrumental) {
-                        return@withContext LrcResult(emptyList(), false, "", isCustom = false, isInstrumental = true)
-                    }
-
-                    return@withContext LrcParser.parse(rawLyrics, false)
+                } catch (_: Exception) {
+                    // Try next query
                 }
             }
 
-            // Fallback to secondary source (Lyrics.ovh) for Hindi, Gujarati, and regional tracks
+            // Tier 3: JioSaavn API (Dominant database for Indian languages: Hindi, Bhojpuri, Gujarati, Punjabi, etc.)
+            val saavnLyrics = fetchLyricsFromJioSaavn(candidateQueries)
+            if (!saavnLyrics.isNullOrBlank()) {
+                lyricsDao.insertLyrics(
+                    LyricsEntity(
+                        songId = song.id,
+                        title = song.title,
+                        artist = song.artist,
+                        durationSec = durationSec,
+                        lrcContent = saavnLyrics,
+                        isSynced = false,
+                        isCustom = false,
+                        isInstrumental = false
+                    )
+                )
+                return@withContext LrcParser.parse(saavnLyrics, false)
+            }
+
+            // Tier 4: Fallback to Lyrics.ovh for International / English / Pop tracks
             val ovhLyrics = fetchLyricsFromLyricsOvh(
                 artist = if (sanitized.artist != "Unknown Artist") sanitized.artist else "",
                 title = sanitized.title
@@ -142,6 +159,28 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
                     )
                 )
                 return@withContext LrcParser.parse(ovhLyrics, false)
+            }
+
+            // Tier 5: Fallback to ChartLyrics API
+            val chartLyrics = fetchLyricsFromChartLyrics(
+                artist = if (sanitized.artist != "Unknown Artist") sanitized.artist else "",
+                title = sanitized.title
+            )
+
+            if (!chartLyrics.isNullOrBlank()) {
+                lyricsDao.insertLyrics(
+                    LyricsEntity(
+                        songId = song.id,
+                        title = song.title,
+                        artist = song.artist,
+                        durationSec = durationSec,
+                        lrcContent = chartLyrics,
+                        isSynced = false,
+                        isCustom = false,
+                        isInstrumental = false
+                    )
+                )
+                return@withContext LrcParser.parse(chartLyrics, false)
             }
         } catch (e: CancellationException) {
             throw e
@@ -217,6 +256,85 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
                 null
             }
         } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun fetchLyricsFromJioSaavn(queries: List<String>): String? {
+        for (query in queries) {
+            if (query.isBlank()) continue
+            try {
+                val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+                val searchUrl = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&p=1&n=8&q=$encoded"
+                val request = Request.Builder()
+                    .url(searchUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+                    .build()
+
+                val raw = ApiClient.okHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) response.body?.string() else null
+                } ?: continue
+
+                val json = try { org.json.JSONObject(raw) } catch (_: Exception) { null } ?: continue
+                val results = json.optJSONArray("results") ?: continue
+
+                for (i in 0 until results.length()) {
+                    val item = results.optJSONObject(i) ?: continue
+                    val songId = item.optString("id")
+                    val hasLyrics = item.optString("has_lyrics") == "true" || item.optBoolean("has_lyrics", false)
+                    if (songId.isNotBlank() && hasLyrics) {
+                        val lyricUrl = "https://www.jiosaavn.com/api.php?__call=lyrics.getLyrics&_format=json&ctx=web6dot0&_marker=0&lyrics_id=$songId"
+                        val lyricReq = Request.Builder()
+                            .url(lyricUrl)
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+                            .build()
+
+                        val lyricRaw = ApiClient.okHttpClient.newCall(lyricReq).execute().use { lyricResp ->
+                            if (lyricResp.isSuccessful) lyricResp.body?.string() else null
+                        }
+
+                        if (!lyricRaw.isNullOrBlank()) {
+                            val lyricJson = try { org.json.JSONObject(lyricRaw) } catch (_: Exception) { null }
+                            val lyricsHtml = lyricJson?.optString("lyrics")
+                            if (!lyricsHtml.isNullOrBlank()) {
+                                val cleanLyrics = android.text.Html.fromHtml(lyricsHtml, android.text.Html.FROM_HTML_MODE_LEGACY)
+                                    .toString()
+                                    .trim()
+                                if (cleanLyrics.isNotBlank()) {
+                                    return cleanLyrics
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // Try next query candidate
+            }
+        }
+        return null
+    }
+
+    private fun fetchLyricsFromChartLyrics(artist: String, title: String): String? {
+        if (title.isBlank()) return null
+        return try {
+            val encTitle = java.net.URLEncoder.encode(title.trim(), "UTF-8")
+            val encArtist = if (artist.isNotBlank() && artist != "Unknown Artist") {
+                java.net.URLEncoder.encode(artist.trim(), "UTF-8")
+            } else ""
+            val url = "http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect?artist=$encArtist&song=$encTitle"
+            val request = Request.Builder().url(url).build()
+            ApiClient.okHttpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: return@use null
+                    val lyricMatch = Regex("<Lyric>(.*?)</Lyric>", RegexOption.DOT_MATCHES_ALL).find(body)
+                    val lyrics = lyricMatch?.groupValues?.getOrNull(1)?.trim()
+                    if (!lyrics.isNullOrBlank() && !lyrics.contains("not found", ignoreCase = true)) {
+                        return@use lyrics
+                    }
+                }
+                null
+            }
+        } catch (_: Exception) {
             null
         }
     }

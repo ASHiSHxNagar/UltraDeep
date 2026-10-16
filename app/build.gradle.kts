@@ -8,13 +8,21 @@ android {
     namespace = "com.ultradeep.music"
     compileSdk = 34
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore/ultradeep.jks")
+            storePassword = "ultradeepmusic"
+            keyAlias = "ultradeep"
+            keyPassword = "ultradeepmusic"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.ultradeep.music"
         minSdk = 26
         targetSdk = 34
-        // CI artifacts need monotonically increasing versions for Android's updater.
-        // Local builds use 2 as the first post-backup update.
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.plus(1) ?: 2
+        // Monotonically increasing version codes starting from 100 ensures seamless updates over older versions.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.plus(100) ?: 100
         versionName = "1.0.$versionCode"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -26,6 +34,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -33,7 +42,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
