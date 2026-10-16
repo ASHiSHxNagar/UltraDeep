@@ -40,6 +40,7 @@ import com.ultradeep.music.ui.lyrics.EditLyricsBottomSheet
 import com.ultradeep.music.util.ArtworkManager
 import com.ultradeep.music.util.PaletteUtil
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -108,19 +109,8 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         setupLyricsRecyclerView()
         setupListeners()
         setupSwipeGestures()
-        setupAmbientTouchForwarding()
         observeMusicController()
         updateIndicators(isLyrics = false)
-    }
-
-    /** Forward finger position to the ambient background so the fluid blob follows the user's touch. */
-    private fun setupAmbientTouchForwarding() {
-        // The root ConstraintLayout sits inside DynamicAmbientView – we attach a touch listener
-        // there so every gesture (on artwork, lyrics, controls) feeds the ambient orb.
-        binding.root.setOnTouchListener { _, event ->
-            binding.ambientBackground.dispatchTouchEvent(event)
-            false   // Don't consume – let children handle clicks normally
-        }
     }
 
     private fun setupLyricsRecyclerView() {
@@ -356,10 +346,11 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         if (currentSongId != -1L) {
             prefs.edit().putLong("lyrics_offset_$currentSongId", currentSongOffsetMs).apply()
         }
+        val b = _binding ?: return
         updateOffsetUI()
         lyricsAdapter.updatePosition(
             MusicController.currentPosition.value,
-            binding.rvLyrics,
+            b.rvLyrics,
             currentSongOffsetMs,
             forceScroll = true,
             immediate = true
@@ -368,7 +359,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
     private fun updateOffsetUI() {
         val seconds = currentSongOffsetMs / 1000f
-        binding.tvCurrentOffset.text = if (currentSongOffsetMs == 0L) "Sync: 0.0s" else String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
+        _binding?.tvCurrentOffset?.text = if (currentSongOffsetMs == 0L) "Sync: 0.0s" else String.format(Locale.getDefault(), "Sync: %+.1fs", seconds)
     }
 
     private fun showCustomOffsetInputDialog() {
@@ -410,13 +401,14 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             .setView(layout)
             .setPositiveButton("Save") { _, _ ->
                 val offset = parseSignedOffsetMs(input.text.toString())
+                val hostContext = context ?: return@setPositiveButton
                 if (offset == null) {
-                    Toast.makeText(requireContext(), "Enter +1.5, -0.75, or HH:MM:SS", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(hostContext, "Enter +1.5, -0.75, or HH:MM:SS", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 setSyncOffset(offset)
                 Toast.makeText(
-                    requireContext(),
+                    hostContext,
                     String.format(Locale.getDefault(), "Lyrics offset set to %+.2fs", offset / 1000f),
                     Toast.LENGTH_SHORT
                 ).show()
@@ -652,50 +644,60 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         val repository = UltraDeepApplication.instance.lyricsRepository
         lyricsJob?.cancel()
         lyricsJob = viewLifecycleOwner.lifecycleScope.launch {
-            // Playback never starts a network request on its own. Fetching is explicit
-            // from the track menu or the Settings bulk actions, and every successful
-            // response is persisted before this screen renders it.
-            if (!repository.hasSavedLyrics(song.id)) {
+            try {
+                // Playback never starts a network request on its own. Fetching is explicit
+                // from the track menu or the Settings bulk actions, and every successful
+                // response is persisted before this screen renders it.
+                if (!repository.hasSavedLyrics(song.id)) {
+                    val currentB = _binding ?: return@launch
+                    if (isAdded && lyricsRequestSongId == song.id && currentSongId == song.id) {
+                        rawLyricsCache = ""
+                        lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
+                        currentB.tvLyricsStatus.text = "Lyrics not saved yet • use Fetch lyrics in the track menu"
+                    }
+                    return@launch
+                }
+                val result = repository.getLyrics(song, forceRefresh)
                 val currentB = _binding ?: return@launch
-                if (isAdded && lyricsRequestSongId == song.id && currentSongId == song.id) {
-                    rawLyricsCache = ""
-                    lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
-                    currentB.tvLyricsStatus.text = "Lyrics not saved yet • use Fetch lyrics in the track menu"
-                }
-                return@launch
-            }
-            val result = repository.getLyrics(song, forceRefresh)
-            val currentB = _binding ?: return@launch
-            // Requests can finish out of order when the user skips quickly.
-            if (!isAdded || lyricsRequestSongId != song.id || currentSongId != song.id) return@launch
-            rawLyricsCache = if (result.isSynced) {
-                result.lines.joinToString("\n") { line ->
-                    val minutes = line.timestampMs / 60_000
-                    val seconds = (line.timestampMs / 1_000) % 60
-                    val millis = line.timestampMs % 1_000
-                    String.format(Locale.US, "[%02d:%02d.%03d]%s", minutes, seconds, millis, line.text)
-                }
-            } else result.plainText
+                // Requests can finish out of order when the user skips quickly.
+                if (!isAdded || lyricsRequestSongId != song.id || currentSongId != song.id) return@launch
+                rawLyricsCache = if (result.isSynced) {
+                    result.lines.joinToString("\n") { line ->
+                        val minutes = line.timestampMs / 60_000
+                        val seconds = (line.timestampMs / 1_000) % 60
+                        val millis = line.timestampMs % 1_000
+                        String.format(Locale.US, "[%02d:%02d.%03d]%s", minutes, seconds, millis, line.text)
+                    }
+                } else result.plainText
 
-            if (result.isInstrumental) {
-                currentB.tvLyricsStatus.visibility = View.VISIBLE
-                currentB.tvLyricsStatus.text = getString(R.string.lyrics_instrumental)
-                lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
-            } else if (result.lines.isEmpty()) {
-                currentB.tvLyricsStatus.visibility = View.VISIBLE
-                currentB.tvLyricsStatus.text = getString(R.string.lyrics_none)
-                lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
-            } else {
-                currentB.tvLyricsStatus.visibility = View.GONE
-                lyricsAdapter.submitLines(result.lines, currentB.rvLyrics)
-                updateOffsetUI()
-                lyricsAdapter.updatePosition(
-                    MusicController.currentPosition.value,
-                    currentB.rvLyrics,
-                    currentSongOffsetMs,
-                    forceScroll = true,
-                    immediate = true
-                )
+                if (result.isInstrumental) {
+                    currentB.tvLyricsStatus.visibility = View.VISIBLE
+                    currentB.tvLyricsStatus.text = getString(R.string.lyrics_instrumental)
+                    lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
+                } else if (result.lines.isEmpty()) {
+                    currentB.tvLyricsStatus.visibility = View.VISIBLE
+                    currentB.tvLyricsStatus.text = getString(R.string.lyrics_none)
+                    lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
+                } else {
+                    currentB.tvLyricsStatus.visibility = View.GONE
+                    lyricsAdapter.submitLines(result.lines, currentB.rvLyrics)
+                    updateOffsetUI()
+                    lyricsAdapter.updatePosition(
+                        MusicController.currentPosition.value,
+                        currentB.rvLyrics,
+                        currentSongOffsetMs,
+                        forceScroll = true,
+                        immediate = true
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                val currentB = _binding
+                if (isAdded && currentB != null && lyricsRequestSongId == song.id && currentSongId == song.id) {
+                    currentB.tvLyricsStatus.visibility = View.VISIBLE
+                    currentB.tvLyricsStatus.text = "Lyrics unavailable right now"
+                }
             }
         }
     }

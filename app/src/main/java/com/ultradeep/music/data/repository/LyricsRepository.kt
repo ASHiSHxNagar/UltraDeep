@@ -7,6 +7,7 @@ import com.ultradeep.music.data.model.Song
 import com.ultradeep.music.data.remote.ApiClient
 import com.ultradeep.music.util.LrcParser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 
@@ -142,6 +143,8 @@ class LyricsRepository(private val lyricsDao: LyricsDao) {
                 )
                 return@withContext LrcParser.parse(ovhLyrics, false)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
         }

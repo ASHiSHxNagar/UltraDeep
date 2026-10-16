@@ -181,8 +181,9 @@ class DynamicAmbientView @JvmOverloads constructor(
     }
 
     private fun handleFluidTouch(event: MotionEvent) {
+        if (event.pointerCount <= 0) return
         val action = event.actionMasked
-        val pointerIndex = event.actionIndex
+        val pointerIndex = event.actionIndex.coerceIn(0, event.pointerCount - 1)
         val pointerId = event.getPointerId(pointerIndex)
 
         when (action) {
@@ -248,8 +249,10 @@ class DynamicAmbientView @JvmOverloads constructor(
         targetRadius: Float,
         initialAlpha: Float
     ) {
-        touchColorHue = (touchColorHue + 22f) % 360f
-        val splatColor = shiftHue(baseColor1, touchColorHue)
+        // A touch injects energy into the same hue that is currently filling the
+        // background. This keeps the scene intentionally monochromatic until the
+        // slow colour cycle advances.
+        val splatColor = currentFluidColor()
 
         val splat = splats[nextSplatIndex]
         splat.x = x
@@ -293,6 +296,18 @@ class DynamicAmbientView @JvmOverloads constructor(
     // ── Rendering Engine ─────────────────────────────────────────────────────
 
     override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        if (w <= 0f || h <= 0f) return
+
+        // One stable colour family at a time, with broad moving bodies and
+        // short-lived touch splats layered underneath the child content.
+        drawFluidField(canvas, w, h)
+        super.onDraw(canvas)
+    }
+
+    @Suppress("UNUSED_CODE")
+    private fun drawLegacyFluidField(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
@@ -561,6 +576,78 @@ class DynamicAmbientView @JvmOverloads constructor(
         super.onDraw(canvas)
     }
 
+    private fun drawFluidField(canvas: Canvas, w: Float, h: Float) {
+        canvas.drawRect(0f, 0f, w, h, backgroundPaint)
+
+        val t = animTime * 0.00155f
+        val colourBand = kotlin.math.floor(animTime / 2_400f).toInt()
+        val activeColor = shiftHue(baseColor1, (colourBand * 47f) % 360f)
+        val alpha = if (isLightTheme) 0.19f else 0.52f
+        val radius = (w.coerceAtLeast(h) * 0.54f).coerceAtLeast(420f)
+
+        // Slow, broad blobs make the whole screen feel like a liquid surface while
+        // staying in one colour family at any moment.
+        drawFluidBlob(canvas, w * (0.18f + 0.16f * sin(t * 0.72f)), h * (0.22f + 0.14f * cos(t * 0.58f)), radius, 1.25f, 0.72f, t * 18f, activeColor, alpha, 0)
+        drawFluidBlob(canvas, w * (0.82f + 0.18f * cos(t * 0.61f + 1.5f)), h * (0.36f + 0.20f * sin(t * 0.74f)), radius * 0.92f, 0.95f, 1.20f, -t * 15f, activeColor, alpha * 0.86f, 1)
+        drawFluidBlob(canvas, w * (0.44f + 0.28f * sin(t * 0.45f + 2.1f)), h * (0.82f + 0.16f * cos(t * 0.52f)), radius * 0.84f, 1.40f, 0.62f, t * 12f, activeColor, alpha * 0.72f, 2)
+        drawFluidBlob(canvas, w * (0.64f + 0.24f * cos(t * 0.38f + 3.8f)), h * (0.12f + 0.18f * sin(t * 0.63f)), radius * 0.72f, 0.80f, 1.30f, -t * 20f, activeColor, alpha * 0.64f, 3)
+
+        for (i in 0 until maxSplats) {
+            val splat = splats[i]
+            if (!splat.active || splat.alpha <= 0.01f) continue
+
+            touchSplatPaint.shader = RadialGradient(
+                splat.x,
+                splat.y,
+                splat.radius,
+                intArrayOf(
+                    colorWithAlpha(splat.color, splat.alpha * if (isLightTheme) 0.55f else 0.82f),
+                    colorWithAlpha(splat.color, splat.alpha * if (isLightTheme) 0.28f else 0.52f),
+                    Color.TRANSPARENT
+                ),
+                floatArrayOf(0f, 0.45f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawCircle(splat.x, splat.y, splat.radius, touchSplatPaint)
+        }
+
+        canvas.drawRect(0f, 0f, w, h, scrimPaint)
+    }
+
+    private fun drawFluidBlob(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        radius: Float,
+        scaleX: Float,
+        scaleY: Float,
+        angle: Float,
+        color: Int,
+        alpha: Float,
+        paintIndex: Int
+    ) {
+        val paint = fluidPaints[paintIndex]
+        paint.shader = RadialGradient(
+            0f,
+            0f,
+            radius,
+            intArrayOf(
+                colorWithAlpha(color, alpha),
+                colorWithAlpha(color, alpha * 0.68f),
+                colorWithAlpha(color, alpha * 0.24f),
+                Color.TRANSPARENT
+            ),
+            gradientStops,
+            Shader.TileMode.CLAMP
+        )
+        canvas.save()
+        canvas.translate(x, y)
+        canvas.rotate(angle)
+        canvas.scale(scaleX, scaleY)
+        canvas.drawCircle(0f, 0f, radius, paint)
+        canvas.restore()
+    }
+
     // ── Color Utilities ──────────────────────────────────────────────────────
 
     private fun blendColors(c1: Int, c2: Int): Int {
@@ -583,8 +670,13 @@ class DynamicAmbientView @JvmOverloads constructor(
         return Color.HSVToColor(hsvBuffer)
     }
 
+    private fun currentFluidColor(): Int {
+        val colourBand = kotlin.math.floor(animTime / 2_400f).toInt()
+        return shiftHue(baseColor1, (colourBand * 47f) % 360f)
+    }
+
     private fun colorWithAlpha(color: Int, alphaFloat: Float): Int {
-        val alpha = (alphaFloat * (if (isLightTheme) 0.45f else 1.0f) * 255).toInt().coerceIn(0, 255)
+        val alpha = (alphaFloat * 255).toInt().coerceIn(0, 255)
         return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
     }
 

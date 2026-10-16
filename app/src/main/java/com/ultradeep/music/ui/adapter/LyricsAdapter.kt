@@ -68,6 +68,10 @@ class LyricsAdapter(
         if (lines.isEmpty()) return
         // Do not auto-scroll if lines have no timestamps (unsynced plain lyrics)
         if (lines.firstOrNull()?.timestampMs == -1L) return
+        // Position updates arrive every 100ms. A seek or a fast track change can
+        // land exactly during RecyclerView layout; skip that frame and let the
+        // next position update apply safely instead of touching holders mid-layout.
+        if (recyclerView.isComputingLayout) return
 
         val effectivePos = (currentPositionMs - offsetMs).coerceAtLeast(0L)
         var newIndex = -1
@@ -104,8 +108,14 @@ class LyricsAdapter(
 
                     if (immediate || kotlin.math.abs(newIndex - oldIndex) > 2) {
                         recyclerView.post {
-                            if (activeIndex in lines.indices && !recyclerView.isComputingLayout) {
-                                layoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
+                            if (!recyclerView.isAttachedToWindow || recyclerView.isComputingLayout) return@post
+                            val currentLayoutManager = recyclerView.layoutManager as? LinearLayoutManager ?: return@post
+                            if (activeIndex in lines.indices && activeIndex < itemCount) {
+                                try {
+                                    currentLayoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
+                                } catch (_: IllegalStateException) {
+                                    // The sheet may have been dismissed between post and execution.
+                                }
                             }
                         }
                     } else {
@@ -118,6 +128,7 @@ class LyricsAdapter(
 
     private fun updateHolderVisually(recyclerView: RecyclerView, index: Int) {
         if (index !in lines.indices) return
+        if (!recyclerView.isAttachedToWindow || recyclerView.isComputingLayout) return
         val holder = recyclerView.findViewHolderForAdapterPosition(index) as? LyricViewHolder
         if (holder != null) {
             val line = lines[index]
