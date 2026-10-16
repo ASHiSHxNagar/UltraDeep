@@ -224,37 +224,49 @@ class LyricsAdapter(
             tvLine.typeface = getTypeface(ctx)
             tvLine.setTextColor(primaryTextColor)
             tvLine.letterSpacing = 0.01f
-            tvLine.scaleX = 1.0f
-            tvLine.scaleY = 1.0f
+            tvLine.pivotX = 0f
+            tvLine.pivotY = if (tvLine.height > 0) tvLine.height / 2f else 0f
 
             if (isActive) {
-                // ── Spotify Active Line: 100% solid opacity pop-in ─────────────
+                // ── Spotify Active Line: Scale UP to 1.08f with bright full opacity ─────────────
                 if (animate && !wasActive) {
                     tvLine.animate().cancel()
-                    tvLine.alpha = 0.80f
+                    tvLine.scaleX = 0.90f
+                    tvLine.scaleY = 0.90f
+                    tvLine.alpha = 0.70f
                     tvLine.animate()
+                        .scaleX(1.08f)
+                        .scaleY(1.08f)
                         .alpha(1.0f)
                         .setInterpolator(DecelerateInterpolator(1.4f))
-                        .setDuration(200)
+                        .setDuration(260)
                         .start()
                 } else {
+                    tvLine.scaleX = 1.08f
+                    tvLine.scaleY = 1.08f
                     tvLine.alpha = 1.0f
                 }
             } else {
-                // ── Spotify Inactive Lines: Smooth proximity opacity fade ────
-                val targetAlpha = when (distanceToActive) {
-                    1    -> if (isDarkTheme) 0.60f else 0.62f
-                    2    -> if (isDarkTheme) 0.42f else 0.44f
-                    else -> if (isDarkTheme) 0.26f else 0.28f
+                // ── Spotify Inactive Lines (Past & Future): Visibly smaller text with proximity fade ────
+                val (targetAlpha, targetScale) = when (distanceToActive) {
+                    1    -> Pair(if (isDarkTheme) 0.58f else 0.60f, 0.88f)
+                    2    -> Pair(if (isDarkTheme) 0.40f else 0.42f, 0.82f)
+                    else -> Pair(if (isDarkTheme) 0.24f else 0.26f, 0.76f)
                 }
 
                 if (animate && wasActive) {
+                    // Smoothly shrink down from active to past
                     tvLine.animate().cancel()
                     tvLine.animate()
+                        .scaleX(targetScale)
+                        .scaleY(targetScale)
                         .alpha(targetAlpha)
-                        .setDuration(200)
+                        .setInterpolator(DecelerateInterpolator(1.2f))
+                        .setDuration(240)
                         .start()
                 } else {
+                    tvLine.scaleX = targetScale
+                    tvLine.scaleY = targetScale
                     tvLine.alpha = targetAlpha
                 }
             }

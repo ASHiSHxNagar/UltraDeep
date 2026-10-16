@@ -4,9 +4,9 @@
     android:layout_height="wrap_content"
     android:foreground="?attr/selectableItemBackground"
     android:paddingStart="20dp"
-    android:paddingEnd="20dp"
-    android:paddingTop="9dp"
-    android:paddingBottom="9dp">
+    android:paddingEnd="36dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
 
     <TextView
         android:id="@+id/tvLyricLine"
