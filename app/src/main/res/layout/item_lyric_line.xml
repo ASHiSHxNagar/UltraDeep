@@ -24,7 +24,7 @@
         android:lineSpacingExtra="2dp"
         android:text="Lyric Line"
         android:textColor="@color/text_primary"
-        android:textSize="24sp"
+        android:textSize="18sp"
         android:letterSpacing="0.01" />
 
 </FrameLayout>

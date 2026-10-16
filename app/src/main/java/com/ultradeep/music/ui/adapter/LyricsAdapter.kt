@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import androidx.core.content.ContextCompat
 import android.util.DisplayMetrics
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -88,16 +89,12 @@ class LyricsAdapter(
             val oldIndex = activeIndex
             activeIndex = newIndex
 
-            // Update visible view holders in-place without triggering full layout passes or crashing
-            updateHolderVisually(recyclerView, oldIndex)
-            updateHolderVisually(recyclerView, activeIndex)
-            if (oldIndex in lines.indices) {
-                updateHolderVisually(recyclerView, oldIndex - 1)
-                updateHolderVisually(recyclerView, oldIndex + 1)
-            }
-            if (activeIndex in lines.indices) {
-                updateHolderVisually(recyclerView, activeIndex - 1)
-                updateHolderVisually(recyclerView, activeIndex + 1)
+            val minIdx = if (oldIndex >= 0) minOf(oldIndex, activeIndex) else activeIndex
+            val maxIdx = if (oldIndex >= 0) maxOf(oldIndex, activeIndex) else activeIndex
+            val range = ((minIdx - 2).coerceAtLeast(0)..(maxIdx + 2).coerceAtMost(lines.size - 1))
+            for (idx in range) {
+                val shouldAnimate = (idx == oldIndex || idx == activeIndex)
+                updateHolderVisually(recyclerView, idx, animate = shouldAnimate)
             }
 
             if (activeIndex in lines.indices && (!isUserScrolling || forceScroll)) {
@@ -126,14 +123,14 @@ class LyricsAdapter(
         }
     }
 
-    private fun updateHolderVisually(recyclerView: RecyclerView, index: Int) {
+    private fun updateHolderVisually(recyclerView: RecyclerView, index: Int, animate: Boolean = true) {
         if (index !in lines.indices) return
         if (!recyclerView.isAttachedToWindow || recyclerView.isComputingLayout) return
         val holder = recyclerView.findViewHolderForAdapterPosition(index) as? LyricViewHolder
         if (holder != null) {
             val line = lines[index]
             val distance = if (activeIndex >= 0) kotlin.math.abs(index - activeIndex) else Int.MAX_VALUE
-            holder.bind(line, isActive = (index == activeIndex), distanceToActive = distance, animate = true)
+            holder.bind(line, isActive = (index == activeIndex), distanceToActive = distance, animate = animate)
         }
     }
 
@@ -224,49 +221,68 @@ class LyricsAdapter(
             tvLine.typeface = getTypeface(ctx)
             tvLine.setTextColor(primaryTextColor)
             tvLine.letterSpacing = 0.01f
+            val isUnsynced = lines.firstOrNull()?.timestampMs == -1L
+            val targetTextSize = when {
+                isUnsynced -> 19f
+                isActive   -> 24f
+                else       -> 18f
+            }
+
+            val currentSp = tvLine.textSize / ctx.resources.displayMetrics.scaledDensity
+            if (kotlin.math.abs(currentSp - targetTextSize) > 0.5f) {
+                tvLine.setTextSize(TypedValue.COMPLEX_UNIT_SP, targetTextSize)
+            }
+
             tvLine.pivotX = 0f
-            tvLine.pivotY = if (tvLine.height > 0) tvLine.height / 2f else 0f
+            tvLine.pivotY = 0f
 
             if (isActive) {
-                // ── Spotify Active Line: Scale UP to 1.08f with bright full opacity ─────────────
+                // ── Spotify Active Line: Scale UP to 1.0f (24sp) with bright full opacity ─────────────
                 if (animate && !wasActive) {
                     tvLine.animate().cancel()
-                    tvLine.scaleX = 0.90f
-                    tvLine.scaleY = 0.90f
+                    tvLine.scaleX = 0.82f
+                    tvLine.scaleY = 0.82f
                     tvLine.alpha = 0.70f
                     tvLine.animate()
-                        .scaleX(1.08f)
-                        .scaleY(1.08f)
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
                         .alpha(1.0f)
                         .setInterpolator(DecelerateInterpolator(1.4f))
                         .setDuration(260)
                         .start()
                 } else {
-                    tvLine.scaleX = 1.08f
-                    tvLine.scaleY = 1.08f
+                    tvLine.scaleX = 1.0f
+                    tvLine.scaleY = 1.0f
                     tvLine.alpha = 1.0f
                 }
             } else {
-                // ── Spotify Inactive Lines (Past & Future): Visibly smaller text with proximity fade ────
-                val (targetAlpha, targetScale) = when (distanceToActive) {
-                    1    -> Pair(if (isDarkTheme) 0.58f else 0.60f, 0.88f)
-                    2    -> Pair(if (isDarkTheme) 0.40f else 0.42f, 0.82f)
-                    else -> Pair(if (isDarkTheme) 0.24f else 0.26f, 0.76f)
+                // ── Spotify Inactive Lines (Past & Future): Default small 18sp text with proximity fade ────
+                val targetAlpha = if (isUnsynced) {
+                    0.85f
+                } else {
+                    when (distanceToActive) {
+                        1    -> if (isDarkTheme) 0.58f else 0.60f
+                        2    -> if (isDarkTheme) 0.40f else 0.42f
+                        else -> if (isDarkTheme) 0.24f else 0.26f
+                    }
                 }
 
                 if (animate && wasActive) {
-                    // Smoothly shrink down from active to past
+                    // Smoothly shrink down from large active size to small 18sp past text
                     tvLine.animate().cancel()
+                    tvLine.scaleX = 1.25f
+                    tvLine.scaleY = 1.25f
+                    tvLine.alpha = 0.90f
                     tvLine.animate()
-                        .scaleX(targetScale)
-                        .scaleY(targetScale)
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
                         .alpha(targetAlpha)
                         .setInterpolator(DecelerateInterpolator(1.2f))
                         .setDuration(240)
                         .start()
                 } else {
-                    tvLine.scaleX = targetScale
-                    tvLine.scaleY = targetScale
+                    tvLine.scaleX = 1.0f
+                    tvLine.scaleY = 1.0f
                     tvLine.alpha = targetAlpha
                 }
             }
