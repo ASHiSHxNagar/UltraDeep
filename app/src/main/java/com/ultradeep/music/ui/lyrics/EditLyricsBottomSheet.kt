@@ -290,6 +290,7 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
 
     private fun applyTimeShift(): Int {
         var activeShiftMs: Long? = null
+        var lastValidTimestampMs: Long? = null
         var updatedCount = 0
 
         if (!binding.cbAutoTimeShift.isChecked) {
@@ -306,24 +307,39 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
         for (row in rows) {
             val currentParsed = parseTimestamp(row.time.text.toString())
             val oldBaseline = row.baselineMs
+            val hasLyric = row.lyric.text.toString().trim().isNotEmpty()
 
             if (oldBaseline != null && currentParsed != null) {
                 if (currentParsed != oldBaseline) {
                     activeShiftMs = currentParsed - oldBaseline
                     row.baselineMs = currentParsed
+                    lastValidTimestampMs = currentParsed
                     updatedCount++
                 } else if (activeShiftMs != null && activeShiftMs != 0L) {
                     val shiftedMs = maxOf(0L, oldBaseline + activeShiftMs)
                     row.time.setText(formatTimestamp(shiftedMs))
                     row.baselineMs = shiftedMs
+                    lastValidTimestampMs = shiftedMs
                     updatedCount++
+                } else {
+                    lastValidTimestampMs = currentParsed
                 }
-            } else if (oldBaseline == null && currentParsed != null) {
+            } else if (currentParsed != null) {
                 row.baselineMs = currentParsed
+                lastValidTimestampMs = currentParsed
                 updatedCount++
-            } else if (oldBaseline != null && currentParsed == null) {
-                row.baselineMs = null
-                updatedCount++
+            } else {
+                // currentParsed is null (empty timestamp box)
+                if (hasLyric && lastValidTimestampMs != null) {
+                    // Auto-fill empty box with +2 second incremental gap
+                    val autoMs = lastValidTimestampMs + 2000L
+                    row.time.setText(formatTimestamp(autoMs))
+                    row.baselineMs = autoMs
+                    lastValidTimestampMs = autoMs
+                    updatedCount++
+                } else {
+                    row.baselineMs = null
+                }
             }
         }
         return updatedCount
