@@ -5,8 +5,8 @@
     android:foreground="?attr/selectableItemBackground"
     android:paddingStart="24dp"
     android:paddingEnd="24dp"
-    android:paddingTop="9dp"
-    android:paddingBottom="9dp">
+    android:paddingTop="11dp"
+    android:paddingBottom="11dp">
 
     <TextView
         android:id="@+id/tvLyricLine"
@@ -16,11 +16,11 @@
         android:textStyle="bold"
         android:breakStrategy="balanced"
         android:hyphenationFrequency="none"
-        android:lineSpacingMultiplier="1.22"
-        android:lineSpacingExtra="0dp"
+        android:lineSpacingMultiplier="1.25"
+        android:lineSpacingExtra="3dp"
         android:text="Lyric Line"
         android:textColor="@color/text_primary"
-        android:textSize="26sp"
-        android:letterSpacing="-0.02" />
+        android:textSize="25sp"
+        android:letterSpacing="0.015" />
 
 </FrameLayout>

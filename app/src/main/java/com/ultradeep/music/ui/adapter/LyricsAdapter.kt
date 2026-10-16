@@ -202,43 +202,58 @@ class LyricsAdapter(
             }
         }
 
+        private fun formatWithWordGap(text: String): CharSequence {
+            if (!text.contains(' ')) return text
+            val spannable = android.text.SpannableString(text)
+            for (i in text.indices) {
+                if (text[i] == ' ') {
+                    spannable.setSpan(
+                        android.text.style.ScaleXSpan(1.45f),
+                        i, i + 1,
+                        android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+            }
+            return spannable
+        }
+
         fun bind(line: LyricLine, isActive: Boolean, distanceToActive: Int, animate: Boolean) {
             val ctx = itemView.context
             val isDarkTheme = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             val primaryTextColor = if (isDarkTheme) Color.WHITE else ContextCompat.getColor(ctx, R.color.text_primary)
 
-            tvLine.text = line.text
+            tvLine.text = formatWithWordGap(line.text)
             tvLine.typeface = getTypeface(ctx)
             tvLine.setTextColor(primaryTextColor)
-            tvLine.letterSpacing = -0.02f
+            tvLine.letterSpacing = 0.015f
             tvLine.pivotX = 0f
-            tvLine.pivotY = tvLine.height.toFloat() / 2f
+            tvLine.pivotY = if (tvLine.height > 0) tvLine.height / 2f else 0f
 
             if (isActive) {
-                // ── Spotify Active Line: Solid text, scale pop-in ─────────────
+                // ── Spotify Active Line: Noticeably larger, bold pop-in ─────────────
                 if (animate && !wasActive) {
                     tvLine.animate().cancel()
-                    tvLine.scaleX = 0.98f
-                    tvLine.scaleY = 0.98f
+                    tvLine.scaleX = 0.95f
+                    tvLine.scaleY = 0.95f
                     tvLine.alpha = 0.85f
                     tvLine.animate()
-                        .scaleX(1.08f)
-                        .scaleY(1.08f)
+                        .scaleX(1.22f)
+                        .scaleY(1.22f)
                         .alpha(1.0f)
                         .setInterpolator(DecelerateInterpolator(1.4f))
                         .setDuration(240)
                         .start()
                 } else {
-                    tvLine.scaleX = 1.08f
-                    tvLine.scaleY = 1.08f
+                    tvLine.scaleX = 1.22f
+                    tvLine.scaleY = 1.22f
                     tvLine.alpha = 1.0f
                 }
             } else {
-                // ── Spotify Inactive Lines: Dimmed with proximity fade ────
+                // ── Spotify Inactive Lines (Past & Future): Distinctly smaller with proximity fade ────
                 val style = when (distanceToActive) {
-                    1    -> StyleConfig(alpha = if (isDarkTheme) 0.62f else 0.65f, scale = 0.98f)
-                    2    -> StyleConfig(alpha = if (isDarkTheme) 0.45f else 0.46f, scale = 0.94f)
-                    else -> StyleConfig(alpha = if (isDarkTheme) 0.28f else 0.28f, scale = 0.90f)
+                    1    -> StyleConfig(alpha = if (isDarkTheme) 0.54f else 0.56f, scale = 0.88f)
+                    2    -> StyleConfig(alpha = if (isDarkTheme) 0.38f else 0.40f, scale = 0.82f)
+                    else -> StyleConfig(alpha = if (isDarkTheme) 0.24f else 0.26f, scale = 0.78f)
                 }
 
                 if (animate && wasActive) {
@@ -247,7 +262,7 @@ class LyricsAdapter(
                         .scaleX(style.scale)
                         .scaleY(style.scale)
                         .alpha(style.alpha)
-                        .setDuration(200)
+                        .setDuration(220)
                         .start()
                 } else {
                     tvLine.scaleX = style.scale
