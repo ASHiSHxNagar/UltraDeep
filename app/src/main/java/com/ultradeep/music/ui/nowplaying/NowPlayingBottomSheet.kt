@@ -228,9 +228,9 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
                 isUserTrackingSeekBar = false
-                val duration = MusicController.duration.value
+                val duration = MusicController.duration.value.takeIf { it > 0 } ?: MusicController.currentSong.value?.duration ?: 0L
                 val progress = seekBar?.progress ?: 0
-                val targetMs = (progress / 1000f * duration).toLong()
+                val targetMs = if (duration > 0) (progress / 1000f * duration).toLong() else 0L
                 MusicController.seekTo(targetMs)
                 lyricsAdapter.updatePosition(
                     targetMs,
@@ -629,7 +629,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             if (!repository.hasSavedLyrics(song.id)) {
                 if (isAdded && lyricsRequestSongId == song.id && currentSongId == song.id) {
                     rawLyricsCache = ""
-                    lyricsAdapter.submitLines(emptyList())
+                    lyricsAdapter.submitLines(emptyList(), binding.rvLyrics)
                     binding.tvLyricsStatus.text = "Lyrics not saved yet • use Fetch lyrics in the track menu"
                 }
                 return@launch
@@ -649,14 +649,14 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             if (result.isInstrumental) {
                 binding.tvLyricsStatus.visibility = View.VISIBLE
                 binding.tvLyricsStatus.text = getString(R.string.lyrics_instrumental)
-                lyricsAdapter.submitLines(emptyList())
+                lyricsAdapter.submitLines(emptyList(), binding.rvLyrics)
             } else if (result.lines.isEmpty()) {
                 binding.tvLyricsStatus.visibility = View.VISIBLE
                 binding.tvLyricsStatus.text = getString(R.string.lyrics_none)
-                lyricsAdapter.submitLines(emptyList())
+                lyricsAdapter.submitLines(emptyList(), binding.rvLyrics)
             } else {
                 binding.tvLyricsStatus.visibility = View.GONE
-                lyricsAdapter.submitLines(result.lines)
+                lyricsAdapter.submitLines(result.lines, binding.rvLyrics)
                 updateOffsetUI()
                 lyricsAdapter.updatePosition(
                     MusicController.currentPosition.value,

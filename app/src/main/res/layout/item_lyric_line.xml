@@ -3,23 +3,24 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:foreground="?attr/selectableItemBackground"
-    android:paddingStart="20dp"
-    android:paddingEnd="20dp"
-    android:paddingTop="6dp"
-    android:paddingBottom="6dp">
+    android:paddingStart="24dp"
+    android:paddingEnd="24dp"
+    android:paddingTop="9dp"
+    android:paddingBottom="9dp">
 
     <TextView
         android:id="@+id/tvLyricLine"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:fontFamily="@font/manrope_variable"
+        android:textStyle="bold"
         android:breakStrategy="balanced"
         android:hyphenationFrequency="none"
-        android:lineSpacingMultiplier="1.25"
+        android:lineSpacingMultiplier="1.22"
         android:lineSpacingExtra="0dp"
         android:text="Lyric Line"
-        android:textColor="@color/text_inactive_lyric"
+        android:textColor="#FFFFFF"
         android:textSize="26sp"
-        android:letterSpacing="-0.01" />
+        android:letterSpacing="-0.015" />
 
 </FrameLayout>

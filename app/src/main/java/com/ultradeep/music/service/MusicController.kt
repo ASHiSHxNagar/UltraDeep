@@ -253,14 +253,23 @@ object MusicController {
 
     fun seekTo(positionMs: Long) {
         val player = mediaController ?: return
-        val safePosition = positionMs.coerceIn(0L, _duration.value.coerceAtLeast(0L))
-        player.seekTo(safePosition)
-        _currentPosition.value = safePosition
+        try {
+            val maxDur = (_duration.value.takeIf { it > 0 } ?: _currentSong.value?.duration ?: Long.MAX_VALUE)
+            val safePosition = positionMs.coerceIn(0L, maxDur)
+            player.seekTo(safePosition)
+            _currentPosition.value = safePosition
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     /** Used by the now-playing press-and-hold gesture; it never changes the queue. */
     fun setPlaybackSpeed(speed: Float) {
-        mediaController?.playbackParameters = PlaybackParameters(speed.coerceIn(0.25f, 2f))
+        try {
+            mediaController?.playbackParameters = PlaybackParameters(speed.coerceIn(0.25f, 2f))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun skipNext() {
@@ -268,7 +277,13 @@ object MusicController {
         if (currentQueue.isEmpty()) return
 
         val nextIndex = if (_isShuffle.value) {
-            currentQueue.indices.random()
+            if (currentQueue.size > 1) {
+                var rand = currentQueue.indices.random()
+                while (rand == _currentIndex.value && currentQueue.size > 1) {
+                    rand = currentQueue.indices.random()
+                }
+                rand
+            } else 0
         } else {
             val idx = _currentIndex.value + 1
             if (idx >= currentQueue.size) {
@@ -277,22 +292,40 @@ object MusicController {
         }
 
         val nextSong = currentQueue.getOrNull(nextIndex) ?: return
-        playSong(nextSong, currentQueue)
+        try {
+            playSong(nextSong, currentQueue)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun skipPrevious() {
         val player = mediaController
-        if (player != null && player.currentPosition > 3000L) {
-            seekTo(0L)
-            return
+        if (player != null) {
+            try {
+                if (player.currentPosition > 3000L) {
+                    seekTo(0L)
+                    return
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
 
         val currentQueue = _queue.value
         if (currentQueue.isEmpty()) return
 
-        val prevIndex = (_currentIndex.value - 1).coerceAtLeast(0)
+        val prevIndex = if (_currentIndex.value - 1 < 0) {
+            if (_repeatMode.value == Player.REPEAT_MODE_ALL) currentQueue.size - 1 else 0
+        } else {
+            _currentIndex.value - 1
+        }
         val prevSong = currentQueue.getOrNull(prevIndex) ?: return
-        playSong(prevSong, currentQueue)
+        try {
+            playSong(prevSong, currentQueue)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun toggleShuffle() {

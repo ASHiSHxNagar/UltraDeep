@@ -1,13 +1,14 @@
 package com.ultradeep.music.ui.adapter
 
 import android.content.Context
+import android.graphics.Color
 import android.graphics.Typeface
 import android.util.DisplayMetrics
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
@@ -22,15 +23,36 @@ class LyricsAdapter(
     private val lines = mutableListOf<LyricLine>()
     private var activeIndex = -1
     private var isUserScrolling = false
+    private var cachedTypeface: Typeface? = null
 
-    // Must live at adapter scope – Kotlin forbids data classes inside inner classes
-    private data class Quad(val size: Float, val alpha: Float, val scaleX: Float, val scaleY: Float)
+    private fun getTypeface(context: Context): Typeface {
+        if (cachedTypeface == null) {
+            cachedTypeface = try {
+                Typeface.create(
+                    ResourcesCompat.getFont(context, R.font.manrope_variable),
+                    Typeface.BOLD
+                )
+            } catch (e: Exception) {
+                Typeface.DEFAULT_BOLD
+            }
+        }
+        return cachedTypeface ?: Typeface.DEFAULT_BOLD
+    }
 
-    fun submitLines(newLines: List<LyricLine>) {
-        lines.clear()
-        lines.addAll(newLines)
-        activeIndex = -1
-        notifyDataSetChanged()
+    private data class StyleConfig(val sizeSp: Float, val alpha: Float, val scale: Float)
+
+    fun submitLines(newLines: List<LyricLine>, recyclerView: RecyclerView? = null) {
+        val updateBlock = {
+            lines.clear()
+            lines.addAll(newLines)
+            activeIndex = -1
+            notifyDataSetChanged()
+        }
+        if (recyclerView != null && (recyclerView.isComputingLayout || recyclerView.isAnimating)) {
+            recyclerView.post { updateBlock() }
+        } else {
+            updateBlock()
+        }
     }
 
     fun getFirstLineTimestamp(): Long = lines.firstOrNull { it.timestampMs >= 0 }?.timestampMs ?: 0L
@@ -46,7 +68,6 @@ class LyricsAdapter(
         // Do not auto-scroll if lines have no timestamps (unsynced plain lyrics)
         if (lines.firstOrNull()?.timestampMs == -1L) return
 
-        // Delay timer formula: positive offsetMs delays lyrics (lyrics appear later)
         val effectivePos = (currentPositionMs - offsetMs).coerceAtLeast(0L)
         var newIndex = -1
         for (i in lines.indices) {
@@ -61,51 +82,76 @@ class LyricsAdapter(
         if (newIndex != activeIndex || forceScroll) {
             val oldIndex = activeIndex
             activeIndex = newIndex
-            if (oldIndex in lines.indices) notifyItemChanged(oldIndex)
-            if (activeIndex in lines.indices) notifyItemChanged(activeIndex)
+
+            // Update visible view holders in-place without triggering full layout passes or crashing
+            updateHolderVisually(recyclerView, oldIndex)
+            updateHolderVisually(recyclerView, activeIndex)
+            if (oldIndex in lines.indices) {
+                updateHolderVisually(recyclerView, oldIndex - 1)
+                updateHolderVisually(recyclerView, oldIndex + 1)
+            }
+            if (activeIndex in lines.indices) {
+                updateHolderVisually(recyclerView, activeIndex - 1)
+                updateHolderVisually(recyclerView, activeIndex + 1)
+            }
 
             if (activeIndex in lines.indices && (!isUserScrolling || forceScroll)) {
                 val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
-                if (immediate || kotlin.math.abs(newIndex - oldIndex) > 2) {
-                    // Instant accurate jump to exact vertical center during seeking
-                    if (layoutManager != null) {
+                if (layoutManager != null) {
+                    val density = recyclerView.resources.displayMetrics.density
+                    val centerOffset = (recyclerView.height / 2) - (36 * density).toInt()
+
+                    if (immediate || kotlin.math.abs(newIndex - oldIndex) > 2) {
                         recyclerView.post {
-                            val centerOffset = (recyclerView.height / 2) - (32 * recyclerView.resources.displayMetrics.density).toInt()
-                            layoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
+                            if (activeIndex in lines.indices) {
+                                layoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
+                            }
                         }
+                    } else {
+                        smoothScrollToActiveLine(recyclerView, activeIndex)
                     }
-                } else {
-                    smoothScrollToActiveLine(recyclerView, activeIndex)
                 }
             }
         }
     }
 
+    private fun updateHolderVisually(recyclerView: RecyclerView, index: Int) {
+        if (index !in lines.indices) return
+        val holder = recyclerView.findViewHolderForAdapterPosition(index) as? LyricViewHolder
+        if (holder != null) {
+            val line = lines[index]
+            val distance = if (activeIndex >= 0) kotlin.math.abs(index - activeIndex) else Int.MAX_VALUE
+            holder.bind(line, isActive = (index == activeIndex), distanceToActive = distance, animate = true)
+        }
+    }
+
     private fun smoothScrollToActiveLine(recyclerView: RecyclerView, index: Int) {
         val layoutManager = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        val context = recyclerView.context
+        if (index !in 0 until itemCount) return
 
-        val smoothScroller = object : LinearSmoothScroller(context) {
-            override fun calculateDtToFit(
-                viewStart: Int,
-                viewEnd: Int,
-                boxStart: Int,
-                boxEnd: Int,
-                snapPreference: Int
-            ): Int {
-                // Exact vertical centering of active line in the visible area
-                val boxCenter = (boxStart + boxEnd) / 2
-                val viewCenter = (viewStart + viewEnd) / 2
-                return boxCenter - viewCenter
-            }
+        try {
+            val smoothScroller = object : LinearSmoothScroller(recyclerView.context) {
+                override fun calculateDtToFit(
+                    viewStart: Int,
+                    viewEnd: Int,
+                    boxStart: Int,
+                    boxEnd: Int,
+                    snapPreference: Int
+                ): Int {
+                    val boxCenter = (boxStart + boxEnd) / 2
+                    val viewCenter = (viewStart + viewEnd) / 2
+                    return boxCenter - viewCenter
+                }
 
-            override fun calculateSpeedPerPixel(displayMetrics: DisplayMetrics): Float {
-                return 30f / displayMetrics.densityDpi
+                override fun calculateSpeedPerPixel(displayMetrics: DisplayMetrics): Float {
+                    return 32f / displayMetrics.densityDpi
+                }
             }
+            smoothScroller.targetPosition = index
+            layoutManager.startSmoothScroll(smoothScroller)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-
-        smoothScroller.targetPosition = index
-        layoutManager.startSmoothScroll(smoothScroller)
     }
 
     fun setUserScrolling(isScrolling: Boolean) {
@@ -118,12 +164,10 @@ class LyricsAdapter(
     }
 
     override fun onBindViewHolder(holder: LyricViewHolder, position: Int) {
+        if (position !in lines.indices) return
         val line = lines[position]
-        holder.bind(
-            line = line,
-            isActive = position == activeIndex,
-            distanceToActive = if (activeIndex >= 0) kotlin.math.abs(position - activeIndex) else Int.MAX_VALUE
-        )
+        val distance = if (activeIndex >= 0) kotlin.math.abs(position - activeIndex) else Int.MAX_VALUE
+        holder.bind(line, isActive = (position == activeIndex), distanceToActive = distance, animate = false)
     }
 
     override fun getItemCount(): Int = lines.size
@@ -144,70 +188,56 @@ class LyricsAdapter(
             }
         }
 
-        fun bind(line: LyricLine, isActive: Boolean, distanceToActive: Int) {
+        fun bind(line: LyricLine, isActive: Boolean, distanceToActive: Int, animate: Boolean) {
             tvLine.text = line.text
-            tvLine.animate().cancel()
-            itemView.animate().cancel()
+            tvLine.typeface = getTypeface(itemView.context)
+            tvLine.setTextColor(Color.WHITE)
+            tvLine.letterSpacing = -0.015f
 
             if (isActive) {
-                // ── Active line: Spotify-style large bold white ──────────────
-                tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_primary))
-                tvLine.textSize = 30f
-                tvLine.typeface = Typeface.create(
-                    ResourcesCompat.getFont(itemView.context, R.font.manrope_variable),
-                    Typeface.BOLD
-                )
-                tvLine.alpha = 1.0f
-                // Pop-in scale: start slightly small & grow to full
-                if (!wasActive) {
-                    tvLine.scaleX = 0.88f
-                    tvLine.scaleY = 0.88f
-                    itemView.translationY = 10f
-                }
-                tvLine.animate()
-                    .scaleX(1f).scaleY(1f).alpha(1f)
-                    .setDuration(260)
-                    .start()
-                itemView.animate()
-                    .translationY(0f)
-                    .setDuration(220)
-                    .start()
-
-            } else {
-                // ── Inactive lines: muted, smaller, italic on extreme distance ─
-                tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_inactive_lyric))
-
-                // Scale text and alpha progressively away from active line
-                val (textSizeSp, targetAlpha, targetScaleX, targetScaleY) = when (distanceToActive) {
-                    1    -> Quad(26f, 0.90f, 0.96f, 0.96f)
-                    2    -> Quad(24f, 0.72f, 0.92f, 0.92f)
-                    3    -> Quad(22f, 0.52f, 0.88f, 0.88f)
-                    else -> Quad(20f, 0.36f, 0.84f, 0.84f)
-                }
-
-                tvLine.textSize = textSizeSp
-                tvLine.typeface = Typeface.create(
-                    ResourcesCompat.getFont(itemView.context, R.font.manrope_variable),
-                    Typeface.NORMAL
-                )
-
-                if (wasActive) {
-                    // Animate out from active state
+                // ── Spotify Active Line: Pure solid white, large 28sp, scale pop-in ──
+                tvLine.textSize = 28f
+                if (animate && !wasActive) {
+                    tvLine.animate().cancel()
+                    tvLine.scaleX = 0.94f
+                    tvLine.scaleY = 0.94f
+                    tvLine.alpha = 0.85f
                     tvLine.animate()
-                        .scaleX(targetScaleX)
-                        .scaleY(targetScaleY)
-                        .alpha(targetAlpha)
-                        .setDuration(220)
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
+                        .alpha(1.0f)
+                        .setInterpolator(DecelerateInterpolator(1.4f))
+                        .setDuration(240)
                         .start()
                 } else {
-                    tvLine.scaleX = targetScaleX
-                    tvLine.scaleY = targetScaleY
-                    tvLine.alpha = targetAlpha
+                    tvLine.scaleX = 1.0f
+                    tvLine.scaleY = 1.0f
+                    tvLine.alpha = 1.0f
                 }
-                itemView.animate().translationY(0f).setDuration(180).start()
+            } else {
+                // ── Spotify Inactive Lines: Dimmed bold white with proximity fade ────
+                val style = when (distanceToActive) {
+                    1    -> StyleConfig(sizeSp = 25f, alpha = 0.62f, scale = 0.96f)
+                    2    -> StyleConfig(sizeSp = 24f, alpha = 0.46f, scale = 0.93f)
+                    else -> StyleConfig(sizeSp = 23f, alpha = 0.30f, scale = 0.90f)
+                }
+
+                tvLine.textSize = style.sizeSp
+                if (animate && wasActive) {
+                    tvLine.animate().cancel()
+                    tvLine.animate()
+                        .scaleX(style.scale)
+                        .scaleY(style.scale)
+                        .alpha(style.alpha)
+                        .setDuration(200)
+                        .start()
+                } else {
+                    tvLine.scaleX = style.scale
+                    tvLine.scaleY = style.scale
+                    tvLine.alpha = style.alpha
+                }
             }
             wasActive = isActive
         }
-
     }
 }

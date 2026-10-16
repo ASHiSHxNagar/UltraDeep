@@ -183,13 +183,18 @@ class MainActivity : AppCompatActivity() {
     private fun setupMiniPlayer() {
         val mini = binding.miniPlayerLayout
 
-        mini.miniPlayerRoot.setOnClickListener {
-            // Prevent showing a new sheet if one is already open
-            if (supportFragmentManager.findFragmentByTag(NowPlayingBottomSheet.TAG) == null) {
+        val openNowPlaying = {
+            val existing = supportFragmentManager.findFragmentByTag(NowPlayingBottomSheet.TAG)
+            if (existing == null || !existing.isAdded) {
                 val sheet = NowPlayingBottomSheet()
                 sheet.show(supportFragmentManager, NowPlayingBottomSheet.TAG)
             }
         }
+
+        mini.miniPlayerRoot.setOnClickListener { openNowPlaying() }
+        mini.thumbnailContainer.setOnClickListener { openNowPlaying() }
+        mini.tvMiniTitle.setOnClickListener { openNowPlaying() }
+        mini.tvMiniArtist.setOnClickListener { openNowPlaying() }
 
         mini.btnMiniPlayPause.setOnClickListener {
             MusicController.togglePlayPause()

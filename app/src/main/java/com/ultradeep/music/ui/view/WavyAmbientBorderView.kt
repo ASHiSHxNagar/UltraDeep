@@ -8,9 +8,7 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.RadialGradient
 import android.graphics.SweepGradient
-import android.view.MotionEvent
 import android.util.AttributeSet
 import android.view.View
 import android.view.animation.LinearInterpolator
@@ -44,9 +42,6 @@ class WavyAmbientBorderView @JvmOverloads constructor(
     private val auraPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
-    private val fluidPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
 
     private val cardRect = RectF()
     private val borderRect = RectF()
@@ -59,23 +54,23 @@ class WavyAmbientBorderView @JvmOverloads constructor(
     private var sweepAngle = 0f
     private var animTime = 0f
     private var animator: ValueAnimator? = null
-    private var touchX = -1f
-    private var touchY = -1f
 
     init {
+        isClickable = false
+        isFocusable = false
         setupAnimator()
     }
 
     private fun setupAnimator() {
         animator?.cancel()
         animator = ValueAnimator.ofFloat(0f, 360000f).apply {
-            duration = 60000L
+            duration = 120000L
             repeatCount = ValueAnimator.INFINITE
             interpolator = LinearInterpolator()
             addUpdateListener { va ->
                 if (isPlaying) {
-                    animTime = (va.animatedValue as Float) * 0.04f
-                    sweepAngle = (sweepAngle + 3.2f) % 360f
+                    animTime = (va.animatedValue as Float) * 0.05f
+                    sweepAngle = (sweepAngle + 2.2f) % 360f
                     invalidate()
                 }
             }
@@ -127,50 +122,7 @@ class WavyAmbientBorderView @JvmOverloads constructor(
         )
         canvas.drawRoundRect(borderRect, cornerRadius, cornerRadius, auraPaint)
 
-        // Fast-moving, overlapping color pools create the fluid ambient motion.
-        val phase = animTime
-        val points = listOf(
-            Triple(
-                w * (0.5f + 0.42f * sin(phase * 1.7f)),
-                h * (0.5f + 0.42f * sin(phase * 1.3f + 1.8f)),
-                primaryColor
-            ),
-            Triple(
-                w * (0.5f + 0.42f * sin(phase * 1.1f + 3.1f)),
-                h * (0.5f + 0.42f * sin(phase * 1.9f)),
-                secondaryColor
-            ),
-            Triple(
-                w * (0.5f + 0.45f * sin(phase * 1.5f + 4.4f)),
-                h * (0.5f + 0.40f * sin(phase * 1.2f + 0.6f)),
-                Color.parseColor("#F72585")
-            )
-        )
-        points.forEach { point ->
-            val radius = w.coerceAtLeast(h) * 0.72f
-            fluidPaint.shader = RadialGradient(
-                point.first,
-                point.second,
-                radius,
-                Color.argb(if (isLightTheme) 35 else 70, Color.red(point.third), Color.green(point.third), Color.blue(point.third)),
-                Color.TRANSPARENT,
-                android.graphics.Shader.TileMode.CLAMP
-            )
-            canvas.drawRoundRect(borderRect, cornerRadius, cornerRadius, fluidPaint)
-        }
-        if (touchX >= 0f && touchY >= 0f) {
-            fluidPaint.shader = RadialGradient(
-                touchX,
-                touchY,
-                w.coerceAtLeast(h) * 0.8f,
-                Color.argb(if (isLightTheme) 48 else 92, 0, 245, 212),
-                Color.TRANSPARENT,
-                android.graphics.Shader.TileMode.CLAMP
-            )
-            canvas.drawRoundRect(borderRect, cornerRadius, cornerRadius, fluidPaint)
-        }
-
-        // Rotating neon edge keeps the card lively even when the fluid pools overlap.
+        // 3. Wavy rotating sweeping neon border gradient
         val cx = w / 2f
         val cy = h / 2f
 
@@ -189,24 +141,6 @@ class WavyAmbientBorderView @JvmOverloads constructor(
 
         borderPaint.shader = sweepGradient
         canvas.drawRoundRect(borderRect, cornerRadius, cornerRadius, borderPaint)
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                touchX = event.x
-                touchY = event.y
-                invalidate()
-                return true
-            }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                touchX = -1f
-                touchY = -1f
-                invalidate()
-                return true
-            }
-        }
-        return true
     }
 
     override fun onAttachedToWindow() {
