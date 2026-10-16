@@ -61,6 +61,8 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     private var speedHoldArmed = false
     private var isSpeedHoldActive = false
     private var speedHoldHost: View? = null
+    private var speedHoldStartX = 0f
+    private var speedHoldStartY = 0f
     private val speedHoldRunnable = Runnable {
         if (speedHoldArmed && MusicController.isPlaying.value) {
             isSpeedHoldActive = true
@@ -304,7 +306,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                     val absDx = kotlin.math.abs(dx)
                     val absDy = kotlin.math.abs(dy)
 
-                    if (!isArtDragging && absDx > touchSlop && absDx > absDy * 1.15f) {
+                    if (!isArtDragging && !isSpeedHoldActive && absDx > touchSlop && absDx > absDy * 1.15f) {
                         isArtDragging = true
                         stopSpeedHold(view)
                         view.parent?.requestDisallowInterceptTouchEvent(true)
@@ -319,7 +321,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                     val absDx = kotlin.math.abs(dx)
                     val absDy = kotlin.math.abs(dy)
 
-                    if (isArtDragging && absDx > swipeThreshold && absDx > absDy) {
+                    if (!isSpeedHoldActive && isArtDragging && absDx > swipeThreshold && absDx > absDy) {
                         toggleLyricsMode(showLyrics = true, slideLeft = (dx < 0))
                     }
                     isArtDragging = false
@@ -335,13 +337,6 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         b.artworkViewLayout.setOnTouchListener(artworkTouchHandler)
         b.ivAlbumArt.setOnTouchListener(artworkTouchHandler)
-        b.contentContainer.setOnTouchListener { view, event ->
-            if (!isLyricsModeActive) {
-                artworkTouchHandler(view, event)
-            } else {
-                false
-            }
-        }
 
         // ── 2. LYRICS GESTURES (Swipe left or right to switch to Artwork) ───────────
         val lyricsGestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
@@ -366,6 +361,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         var isLyricsDragging = false
 
         val lyricsTouchHandler: (View, MotionEvent) -> Boolean = { view, event ->
+            handleSpeedHold(view, event)
             lyricsGestureDetector.onTouchEvent(event)
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -379,8 +375,9 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                     val absDx = kotlin.math.abs(dx)
                     val absDy = kotlin.math.abs(dy)
 
-                    if (!isLyricsDragging && absDx > touchSlop && absDx > absDy * 1.25f) {
+                    if (!isLyricsDragging && !isSpeedHoldActive && absDx > touchSlop && absDx > absDy * 1.25f) {
                         isLyricsDragging = true
+                        stopSpeedHold(view)
                         view.parent?.requestDisallowInterceptTouchEvent(true)
                     }
                     if (isLyricsDragging) {
@@ -393,13 +390,15 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                     val absDx = kotlin.math.abs(dx)
                     val absDy = kotlin.math.abs(dy)
 
-                    if (isLyricsDragging && absDx > swipeThreshold && absDx > absDy) {
+                    if (!isSpeedHoldActive && isLyricsDragging && absDx > swipeThreshold && absDx > absDy) {
                         toggleLyricsMode(showLyrics = false, slideLeft = (dx < 0))
                     }
                     isLyricsDragging = false
+                    stopSpeedHold(view)
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     isLyricsDragging = false
+                    stopSpeedHold(view)
                 }
             }
             true
@@ -408,7 +407,15 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         b.lyricsViewLayout.setOnTouchListener(lyricsTouchHandler)
         b.lyricsGlassContainer.setOnTouchListener(lyricsTouchHandler)
 
-        // Intercept horizontal gestures inside RecyclerView without disturbing vertical lyrics scrolling
+        b.contentContainer.setOnTouchListener { view, event ->
+            if (!isLyricsModeActive) {
+                artworkTouchHandler(view, event)
+            } else {
+                lyricsTouchHandler(view, event)
+            }
+        }
+
+        // Intercept horizontal gestures & speed-hold inside RecyclerView without disturbing vertical lyrics scrolling
         b.rvLyrics.addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
             private var rvStartRawX = 0f
             private var rvStartRawY = 0f
@@ -416,6 +423,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             private var isInterceptionLocked = false
 
             override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                handleSpeedHold(rv, e)
                 lyricsGestureDetector.onTouchEvent(e)
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
@@ -435,23 +443,31 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                                 // Definite horizontal swipe gesture
                                 isHorizontalInterception = true
                                 isInterceptionLocked = true
+                                stopSpeedHold(rv)
                                 rv.parent?.requestDisallowInterceptTouchEvent(true)
                                 return true
                             } else {
                                 // Vertical scroll - let RecyclerView handle it
                                 isInterceptionLocked = true
+                                stopSpeedHold(rv)
                             }
                         }
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        val wasSpeedHolding = isSpeedHoldActive
+                        stopSpeedHold(rv)
                         isHorizontalInterception = false
                         isInterceptionLocked = false
+                        if (wasSpeedHolding) {
+                            return true
+                        }
                     }
                 }
-                return isHorizontalInterception
+                return isHorizontalInterception || isSpeedHoldActive
             }
 
             override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+                handleSpeedHold(rv, e)
                 lyricsGestureDetector.onTouchEvent(e)
                 rv.parent?.requestDisallowInterceptTouchEvent(true)
                 when (e.actionMasked) {
@@ -461,13 +477,15 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                         val absDx = kotlin.math.abs(dx)
                         val absDy = kotlin.math.abs(dy)
 
-                        if (absDx > swipeThreshold && absDx > absDy) {
+                        if (!isSpeedHoldActive && absDx > swipeThreshold && absDx > absDy) {
                             toggleLyricsMode(showLyrics = false, slideLeft = (dx < 0))
                         }
+                        stopSpeedHold(rv)
                         isHorizontalInterception = false
                         isInterceptionLocked = false
                     }
                     MotionEvent.ACTION_CANCEL -> {
+                        stopSpeedHold(rv)
                         isHorizontalInterception = false
                         isInterceptionLocked = false
                     }
@@ -482,20 +500,36 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
 
     /**
-     * Holding the top-right 40% x 40% of artwork temporarily plays at 2×.
+     * Holding the right area of artwork or lyrics temporarily plays at 2× speed.
      * A normal touch, scroll or swipe never changes speed; releasing always restores 1×.
      */
     private fun handleSpeedHold(view: View, event: MotionEvent) {
-        val inSpeedZone = event.x >= view.width * 0.60f && event.y <= view.height * 0.40f
+        val screenWidth = view.resources.displayMetrics.widthPixels
+        val inSpeedZone = event.rawX >= screenWidth * 0.52f
+
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (inSpeedZone && MusicController.isPlaying.value) {
+                    speedHoldStartX = event.rawX
+                    speedHoldStartY = event.rawY
                     speedHoldArmed = true
                     speedHoldHost = view
-                    view.postDelayed(speedHoldRunnable, ViewConfiguration.getLongPressTimeout().toLong())
+                    view.removeCallbacks(speedHoldRunnable)
+                    view.postDelayed(speedHoldRunnable, 300L)
                 }
             }
-            MotionEvent.ACTION_MOVE -> if (!inSpeedZone) stopSpeedHold(view)
+            MotionEvent.ACTION_MOVE -> {
+                if (speedHoldArmed) {
+                    val dx = event.rawX - speedHoldStartX
+                    val dy = event.rawY - speedHoldStartY
+                    val touchSlop = ViewConfiguration.get(view.context).scaledTouchSlop
+                    if (!isSpeedHoldActive && kotlin.math.hypot(dx.toDouble(), dy.toDouble()) > touchSlop * 1.5f) {
+                        stopSpeedHold(view)
+                    } else if (isSpeedHoldActive && event.rawX < screenWidth * 0.40f) {
+                        stopSpeedHold(view)
+                    }
+                }
+            }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopSpeedHold(view)
         }
     }
@@ -507,10 +541,14 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         _binding?.let { b ->
             b.contentContainer.removeCallbacks(speedHoldRunnable)
             b.rvLyrics.removeCallbacks(speedHoldRunnable)
+            b.artworkViewLayout.removeCallbacks(speedHoldRunnable)
+            b.lyricsViewLayout.removeCallbacks(speedHoldRunnable)
+            b.ivAlbumArt.removeCallbacks(speedHoldRunnable)
             if (isSpeedHoldActive) {
                 isSpeedHoldActive = false
                 MusicController.setPlaybackSpeed(1f)
                 b.tvHeaderTitle.setText(R.string.now_playing)
+                b.contentContainer.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
             }
         }
         speedHoldArmed = false
