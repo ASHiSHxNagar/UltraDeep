@@ -260,47 +260,226 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
     private fun setupSwipeGestures() {
         val ctx = context ?: return
-        val swipeThreshold = 80
-        val swipeVelocityThreshold = 100
+        val b = _binding ?: return
 
-        // Gesture detector for Artwork view: swipe left triggers lyrics
+        val touchSlop = ViewConfiguration.get(ctx).scaledTouchSlop
+        val swipeThreshold = 56 * resources.displayMetrics.density
+        val minFlingVelocity = ViewConfiguration.get(ctx).scaledMinimumFlingVelocity
+
+        // ── 1. ARTWORK GESTURES (Swipe left or right to switch to Lyrics) ───────────
         val artworkGestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+
             override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
                 if (e1 == null) return false
-                val diffX = e1.x - e2.x
-                val diffY = e1.y - e2.y
-                if (kotlin.math.abs(diffX) > kotlin.math.abs(diffY) && diffX > swipeThreshold && kotlin.math.abs(velocityX) > swipeVelocityThreshold) {
-                    toggleLyricsMode(true)
+                val diffX = e2.rawX - e1.rawX
+                val diffY = e2.rawY - e1.rawY
+                val absDiffX = kotlin.math.abs(diffX)
+                val absDiffY = kotlin.math.abs(diffY)
+                if (absDiffX > absDiffY * 1.15f && absDiffX > touchSlop && kotlin.math.abs(velocityX) > minFlingVelocity) {
+                    toggleLyricsMode(showLyrics = true, slideLeft = (diffX < 0))
                     return true
                 }
                 return false
             }
         })
 
-        // Gesture detector for Lyrics view: swipe right triggers artwork
-        val lyricsGestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                if (e1 == null) return false
-                val diffX = e2.x - e1.x
-                val diffY = e2.y - e1.y
-                if (kotlin.math.abs(diffX) > kotlin.math.abs(diffY) && diffX > swipeThreshold && kotlin.math.abs(velocityX) > swipeVelocityThreshold) {
-                    toggleLyricsMode(false)
-                    return true
-                }
-                return false
-            }
-        })
+        var artStartRawX = 0f
+        var artStartRawY = 0f
+        var isArtDragging = false
 
-        binding.artworkViewLayout.setOnTouchListener { view, event ->
+        val artworkTouchHandler: (View, MotionEvent) -> Boolean = { view, event ->
             handleSpeedHold(view, event)
             artworkGestureDetector.onTouchEvent(event)
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    artStartRawX = event.rawX
+                    artStartRawY = event.rawY
+                    isArtDragging = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - artStartRawX
+                    val dy = event.rawY - artStartRawY
+                    val absDx = kotlin.math.abs(dx)
+                    val absDy = kotlin.math.abs(dy)
+
+                    if (!isArtDragging && absDx > touchSlop && absDx > absDy * 1.15f) {
+                        isArtDragging = true
+                        stopSpeedHold(view)
+                        view.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (isArtDragging) {
+                        view.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dx = event.rawX - artStartRawX
+                    val dy = event.rawY - artStartRawY
+                    val absDx = kotlin.math.abs(dx)
+                    val absDy = kotlin.math.abs(dy)
+
+                    if (isArtDragging && absDx > swipeThreshold && absDx > absDy) {
+                        toggleLyricsMode(showLyrics = true, slideLeft = (dx < 0))
+                    }
+                    isArtDragging = false
+                    stopSpeedHold(view)
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    isArtDragging = false
+                    stopSpeedHold(view)
+                }
+            }
             true
         }
 
-        binding.lyricsViewLayout.setOnTouchListener { _, event ->
-            lyricsGestureDetector.onTouchEvent(event)
+        b.artworkViewLayout.setOnTouchListener(artworkTouchHandler)
+        b.ivAlbumArt.setOnTouchListener(artworkTouchHandler)
+        b.contentContainer.setOnTouchListener { view, event ->
+            if (!isLyricsModeActive) {
+                artworkTouchHandler(view, event)
+            } else {
+                false
+            }
         }
+
+        // ── 2. LYRICS GESTURES (Swipe left or right to switch to Artwork) ───────────
+        val lyricsGestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                if (e1 == null) return false
+                val diffX = e2.rawX - e1.rawX
+                val diffY = e2.rawY - e1.rawY
+                val absDiffX = kotlin.math.abs(diffX)
+                val absDiffY = kotlin.math.abs(diffY)
+                if (absDiffX > absDiffY * 1.25f && absDiffX > touchSlop && kotlin.math.abs(velocityX) > minFlingVelocity) {
+                    toggleLyricsMode(showLyrics = false, slideLeft = (diffX < 0))
+                    return true
+                }
+                return false
+            }
+        })
+
+        var lyricsStartRawX = 0f
+        var lyricsStartRawY = 0f
+        var isLyricsDragging = false
+
+        val lyricsTouchHandler: (View, MotionEvent) -> Boolean = { view, event ->
+            lyricsGestureDetector.onTouchEvent(event)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lyricsStartRawX = event.rawX
+                    lyricsStartRawY = event.rawY
+                    isLyricsDragging = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - lyricsStartRawX
+                    val dy = event.rawY - lyricsStartRawY
+                    val absDx = kotlin.math.abs(dx)
+                    val absDy = kotlin.math.abs(dy)
+
+                    if (!isLyricsDragging && absDx > touchSlop && absDx > absDy * 1.25f) {
+                        isLyricsDragging = true
+                        view.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (isLyricsDragging) {
+                        view.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dx = event.rawX - lyricsStartRawX
+                    val dy = event.rawY - lyricsStartRawY
+                    val absDx = kotlin.math.abs(dx)
+                    val absDy = kotlin.math.abs(dy)
+
+                    if (isLyricsDragging && absDx > swipeThreshold && absDx > absDy) {
+                        toggleLyricsMode(showLyrics = false, slideLeft = (dx < 0))
+                    }
+                    isLyricsDragging = false
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    isLyricsDragging = false
+                }
+            }
+            true
+        }
+
+        b.lyricsViewLayout.setOnTouchListener(lyricsTouchHandler)
+        b.lyricsGlassContainer.setOnTouchListener(lyricsTouchHandler)
+
+        // Intercept horizontal gestures inside RecyclerView without disturbing vertical lyrics scrolling
+        b.rvLyrics.addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
+            private var rvStartRawX = 0f
+            private var rvStartRawY = 0f
+            private var isHorizontalInterception = false
+            private var isInterceptionLocked = false
+
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                lyricsGestureDetector.onTouchEvent(e)
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        rvStartRawX = e.rawX
+                        rvStartRawY = e.rawY
+                        isHorizontalInterception = false
+                        isInterceptionLocked = false
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = e.rawX - rvStartRawX
+                        val dy = e.rawY - rvStartRawY
+                        val absDx = kotlin.math.abs(dx)
+                        val absDy = kotlin.math.abs(dy)
+
+                        if (!isInterceptionLocked && absDx > touchSlop) {
+                            if (absDx > absDy * 1.35f) {
+                                // Definite horizontal swipe gesture
+                                isHorizontalInterception = true
+                                isInterceptionLocked = true
+                                rv.parent?.requestDisallowInterceptTouchEvent(true)
+                                return true
+                            } else {
+                                // Vertical scroll - let RecyclerView handle it
+                                isInterceptionLocked = true
+                            }
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        isHorizontalInterception = false
+                        isInterceptionLocked = false
+                    }
+                }
+                return isHorizontalInterception
+            }
+
+            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+                lyricsGestureDetector.onTouchEvent(e)
+                rv.parent?.requestDisallowInterceptTouchEvent(true)
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_UP -> {
+                        val dx = e.rawX - rvStartRawX
+                        val dy = e.rawY - rvStartRawY
+                        val absDx = kotlin.math.abs(dx)
+                        val absDy = kotlin.math.abs(dy)
+
+                        if (absDx > swipeThreshold && absDx > absDy) {
+                            toggleLyricsMode(showLyrics = false, slideLeft = (dx < 0))
+                        }
+                        isHorizontalInterception = false
+                        isInterceptionLocked = false
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        isHorizontalInterception = false
+                        isInterceptionLocked = false
+                    }
+                }
+            }
+
+            override fun onRequestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
+                // No-op
+            }
+        })
     }
+
 
     /**
      * Holding the top-right 40% x 40% of artwork temporarily plays at 2×.
@@ -431,7 +610,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         return if (match.groupValues[1] == "-") -positive else positive
     }
 
-    private fun toggleLyricsMode(showLyrics: Boolean) {
+    private fun toggleLyricsMode(showLyrics: Boolean, slideLeft: Boolean = showLyrics) {
         if (isLyricsModeActive == showLyrics) return
         val b = _binding ?: return
         isLyricsModeActive = showLyrics
@@ -440,14 +619,21 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         b.artworkViewLayout.animate().cancel()
         b.lyricsViewLayout.animate().cancel()
 
+        try {
+            b.contentContainer.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        } catch (_: Exception) {}
+
+        val enterStart = if (slideLeft) width else -width
+        val exitEnd = if (slideLeft) -width else width
+
         if (showLyrics) {
-            // Animate Artwork sliding LEFT out, Lyrics sliding in from RIGHT
-            b.lyricsViewLayout.translationX = width
+            // Animate Artwork sliding out, Lyrics sliding in
+            b.lyricsViewLayout.translationX = enterStart
             b.lyricsViewLayout.alpha = 0f
             b.lyricsViewLayout.visibility = View.VISIBLE
 
             b.artworkViewLayout.animate()
-                .translationX(-width)
+                .translationX(exitEnd)
                 .alpha(0f)
                 .setDuration(280)
                 .withEndAction {
@@ -465,13 +651,13 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             b.btnToggleLyricsMode.setIconResource(R.drawable.ic_album)
             updateIndicators(isLyrics = true)
         } else {
-            // Animate Lyrics sliding RIGHT out, Artwork sliding in from LEFT
-            b.artworkViewLayout.translationX = -width
+            // Animate Lyrics sliding out, Artwork sliding in
+            b.artworkViewLayout.translationX = enterStart
             b.artworkViewLayout.alpha = 0f
             b.artworkViewLayout.visibility = View.VISIBLE
 
             b.lyricsViewLayout.animate()
-                .translationX(width)
+                .translationX(exitEnd)
                 .alpha(0f)
                 .setDuration(280)
                 .withEndAction {
