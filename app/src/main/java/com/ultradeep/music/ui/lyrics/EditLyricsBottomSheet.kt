@@ -16,6 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ultradeep.music.R
 import com.ultradeep.music.UltraDeepApplication
 import com.ultradeep.music.data.model.Song
@@ -71,6 +72,7 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
 
         binding.btnEditMode.setOnClickListener { setEditing(true) }
         binding.btnAddLyricLine.setOnClickListener { addRow("", "") }
+        binding.btnPasteLyrics.setOnClickListener { showPasteLyricsDialog() }
         binding.btnCancelEdit.setOnClickListener {
             populateRows(initialContent)
             setEditing(false)
@@ -160,8 +162,108 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
         binding.btnEditMode.visibility = if (enabled) View.GONE else View.VISIBLE
         binding.editActions.visibility = if (enabled) View.VISIBLE else View.GONE
         binding.btnAddLyricLine.visibility = if (enabled) View.VISIBLE else View.GONE
+        binding.btnPasteLyrics.visibility = if (enabled) View.VISIBLE else View.GONE
         binding.urlFetchContainer.visibility = if (enabled) View.VISIBLE else View.GONE
         binding.btnResetLyrics.visibility = if (enabled) View.GONE else View.VISIBLE
+    }
+
+    private fun showPasteLyricsDialog() {
+        val context = requireContext()
+        val currentText = buildString {
+            rows.forEach { (time, lyric) ->
+                val t = time.text.toString().trim()
+                val l = lyric.text.toString().trim()
+                if (l.isNotEmpty() || t.isNotEmpty()) {
+                    if (t.isNotEmpty()) append("[$t] ")
+                    appendLine(l)
+                }
+            }
+        }.trim()
+
+        val editText = EditText(context).apply {
+            hint = "Paste lyrics with or without timestamps [mm:ss.xx]...\nLeave empty and tap OK to clear all lyrics."
+            setText(currentText)
+            setSelection(text.length)
+            isSingleLine = false
+            minLines = 7
+            maxLines = 14
+            isVerticalScrollBarEnabled = true
+            textSize = 14f
+            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
+            setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
+            background = ContextCompat.getDrawable(context, R.drawable.bg_lyrics_editor)
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (18 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad / 2, pad, pad / 2)
+            addView(editText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+
+        MaterialAlertDialogBuilder(context)
+            .setTitle("Paste Lyrics")
+            .setView(container)
+            .setPositiveButton("OK") { _, _ ->
+                applyPastedLyrics(editText.text?.toString() ?: "")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun applyPastedLyrics(rawText: String) {
+        rows.clear()
+        binding.lyricsRowsContainer.removeAllViews()
+
+        val trimmed = rawText.trim()
+        if (trimmed.isEmpty()) {
+            // User pasted nothing / cleared: remove all boxes and keep 1 empty row as placeholder
+            addRow("", "")
+            setEditing(true)
+            Toast.makeText(requireContext(), "All lyric lines cleared", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val timeRegex = Regex("^\\[?(\\d{1,2}:)?(\\d{1,2}):(\\d{2})(?:[\\.:](\\d{1,3}))?\\]?\\s*(.*)$")
+        var addedCount = 0
+
+        trimmed.lineSequence().forEach { line ->
+            val trimmedLine = line.trim()
+            if (trimmedLine.isEmpty()) return@forEach
+
+            // Skip LRC metadata tags like [ti:...], [ar:...], [al:...]
+            if (trimmedLine.startsWith("[") && trimmedLine.contains(":") && !trimmedLine.substring(1, 2).all { it.isDigit() }) {
+                return@forEach
+            }
+
+            val match = timeRegex.matchEntire(trimmedLine)
+            if (match != null) {
+                val hours = match.groupValues[1].removeSuffix(":").toLongOrNull() ?: 0L
+                val minutes = match.groupValues[2].toLongOrNull() ?: 0L
+                val seconds = match.groupValues[3].toLongOrNull() ?: 0L
+                val fraction = match.groupValues[4].padEnd(3, '0').toLongOrNull() ?: 0L
+                val lyricText = match.groupValues[5].trim()
+
+                if (minutes < 60 && seconds < 60) {
+                    val totalMs = ((hours * 3600 + minutes * 60 + seconds) * 1000) + fraction
+                    addRow(formatTimestamp(totalMs), lyricText)
+                    addedCount++
+                    return@forEach
+                }
+            }
+
+            // Normal text line without timestamp
+            addRow("", trimmedLine)
+            addedCount++
+        }
+
+        if (addedCount == 0) {
+            addRow("", "")
+        }
+        setEditing(true)
+        Toast.makeText(requireContext(), "Imported $addedCount lyric lines", Toast.LENGTH_SHORT).show()
     }
 
     private fun importFromUrl() {
@@ -185,7 +287,15 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
                 if (ms == null) appendLine(text) else appendLine("[${formatLrcTimestamp(ms)}]$text")
             }
         }.trim()
-        if (output.isBlank()) { Toast.makeText(requireContext(), "Add at least one lyric", Toast.LENGTH_SHORT).show(); return }
+        if (output.isBlank()) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                UltraDeepApplication.instance.lyricsRepository.resetLyrics(currentSong.id)
+                Toast.makeText(requireContext(), "Saved lyrics removed", Toast.LENGTH_SHORT).show()
+                onLyricsUpdated?.invoke()
+                dismiss()
+            }
+            return
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             UltraDeepApplication.instance.lyricsRepository.saveCustomLyrics(currentSong, output)
             initialContent = output
