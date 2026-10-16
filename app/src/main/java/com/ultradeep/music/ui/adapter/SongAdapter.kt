@@ -25,10 +25,27 @@ class SongAdapter(
     private var activePrimaryColor: Int = Color.parseColor("#00D9FF")
     private var activeSecondaryColor: Int = Color.parseColor("#5A2D82")
 
+    private var attachedRecyclerView: RecyclerView? = null
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        attachedRecyclerView = recyclerView
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView)
+        attachedRecyclerView = null
+    }
+
     fun submitList(newSongs: List<Song>) {
         songs.clear()
         songs.addAll(newSongs)
-        notifyDataSetChanged()
+        val rv = attachedRecyclerView
+        if (rv != null && (rv.isComputingLayout || rv.isAnimating)) {
+            rv.post { notifyDataSetChanged() }
+        } else {
+            notifyDataSetChanged()
+        }
     }
 
     fun setActiveSong(songId: Long, primaryColor: Int? = null, secondaryColor: Int? = null) {
@@ -40,8 +57,20 @@ class SongAdapter(
         activeSongId = songId
         if (primaryColor != null) activePrimaryColor = primaryColor
         if (secondaryColor != null) activeSecondaryColor = secondaryColor
-        if (oldIndex != -1) notifyItemChanged(oldIndex)
-        if (newIndex != -1) notifyItemChanged(newIndex)
+        if (oldIndex != -1) safeNotifyItemChanged(oldIndex)
+        if (newIndex != -1) safeNotifyItemChanged(newIndex)
+    }
+
+    private fun safeNotifyItemChanged(index: Int) {
+        if (index !in songs.indices) return
+        val rv = attachedRecyclerView
+        if (rv != null && (rv.isComputingLayout || rv.isAnimating)) {
+            rv.post {
+                if (index in songs.indices) notifyItemChanged(index)
+            }
+        } else {
+            notifyItemChanged(index)
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongViewHolder {

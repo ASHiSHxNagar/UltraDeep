@@ -28,18 +28,19 @@ class LyricsAdapter(
     private fun getTypeface(context: Context): Typeface {
         if (cachedTypeface == null) {
             cachedTypeface = try {
-                Typeface.create(
-                    ResourcesCompat.getFont(context, R.font.manrope_variable),
-                    Typeface.BOLD
-                )
+                ResourcesCompat.getFont(context, R.font.spotify_circular_bold)
             } catch (e: Exception) {
-                Typeface.DEFAULT_BOLD
+                try {
+                    ResourcesCompat.getFont(context, R.font.manrope_variable)
+                } catch (e2: Exception) {
+                    Typeface.DEFAULT_BOLD
+                }
             }
         }
         return cachedTypeface ?: Typeface.DEFAULT_BOLD
     }
 
-    private data class StyleConfig(val sizeSp: Float, val alpha: Float, val scale: Float)
+    private data class StyleConfig(val alpha: Float, val scale: Float)
 
     fun submitLines(newLines: List<LyricLine>, recyclerView: RecyclerView? = null) {
         val updateBlock = {
@@ -97,13 +98,13 @@ class LyricsAdapter(
 
             if (activeIndex in lines.indices && (!isUserScrolling || forceScroll)) {
                 val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
-                if (layoutManager != null) {
+                if (layoutManager != null && !recyclerView.isComputingLayout) {
                     val density = recyclerView.resources.displayMetrics.density
                     val centerOffset = (recyclerView.height / 2) - (36 * density).toInt()
 
                     if (immediate || kotlin.math.abs(newIndex - oldIndex) > 2) {
                         recyclerView.post {
-                            if (activeIndex in lines.indices) {
+                            if (activeIndex in lines.indices && !recyclerView.isComputingLayout) {
                                 layoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
                             }
                         }
@@ -127,7 +128,7 @@ class LyricsAdapter(
 
     private fun smoothScrollToActiveLine(recyclerView: RecyclerView, index: Int) {
         val layoutManager = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        if (index !in 0 until itemCount) return
+        if (index !in 0 until itemCount || recyclerView.isComputingLayout) return
 
         try {
             val smoothScroller = object : LinearSmoothScroller(recyclerView.context) {
@@ -192,37 +193,37 @@ class LyricsAdapter(
             tvLine.text = line.text
             tvLine.typeface = getTypeface(itemView.context)
             tvLine.setTextColor(Color.WHITE)
-            tvLine.letterSpacing = -0.015f
+            tvLine.letterSpacing = -0.02f
+            tvLine.pivotX = 0f
+            tvLine.pivotY = tvLine.height.toFloat() / 2f
 
             if (isActive) {
-                // ── Spotify Active Line: Pure solid white, large 28sp, scale pop-in ──
-                tvLine.textSize = 28f
+                // ── Spotify Active Line: Pure solid white, scale pop-in ─────────────
                 if (animate && !wasActive) {
                     tvLine.animate().cancel()
-                    tvLine.scaleX = 0.94f
-                    tvLine.scaleY = 0.94f
+                    tvLine.scaleX = 0.98f
+                    tvLine.scaleY = 0.98f
                     tvLine.alpha = 0.85f
                     tvLine.animate()
-                        .scaleX(1.0f)
-                        .scaleY(1.0f)
+                        .scaleX(1.08f)
+                        .scaleY(1.08f)
                         .alpha(1.0f)
                         .setInterpolator(DecelerateInterpolator(1.4f))
                         .setDuration(240)
                         .start()
                 } else {
-                    tvLine.scaleX = 1.0f
-                    tvLine.scaleY = 1.0f
+                    tvLine.scaleX = 1.08f
+                    tvLine.scaleY = 1.08f
                     tvLine.alpha = 1.0f
                 }
             } else {
                 // ── Spotify Inactive Lines: Dimmed bold white with proximity fade ────
                 val style = when (distanceToActive) {
-                    1    -> StyleConfig(sizeSp = 25f, alpha = 0.62f, scale = 0.96f)
-                    2    -> StyleConfig(sizeSp = 24f, alpha = 0.46f, scale = 0.93f)
-                    else -> StyleConfig(sizeSp = 23f, alpha = 0.30f, scale = 0.90f)
+                    1    -> StyleConfig(alpha = 0.62f, scale = 0.98f)
+                    2    -> StyleConfig(alpha = 0.45f, scale = 0.94f)
+                    else -> StyleConfig(alpha = 0.28f, scale = 0.90f)
                 }
 
-                tvLine.textSize = style.sizeSp
                 if (animate && wasActive) {
                     tvLine.animate().cancel()
                     tvLine.animate()

@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Spotify-style glassmorphism background for the lyrics container.
-     A very subtle semi-transparent dark rounded rectangle that lets the
-     fluid ambient orbs bleed through while keeping lyrics legible. -->
+<!-- Premium Spotify Dark Glassmorphism Container:
+     A rich, sleek dark acrylic tinted glass panel (#7E070A1A = ~50% opacity deep obsidian navy)
+     with a polished 1.5dp frosted glass rim highlight (#40FFFFFF).
+     Allows fluid ambient vortices to flow and glow vividly behind and around it,
+     while providing high contrast so bold white lyrics pop effortlessly. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#24080D1E" />
+    <solid android:color="#7E070A1A" />
     <stroke
-        android:width="1.2dp"
-        android:color="#35FFFFFF" />
-    <corners android:radius="26dp" />
+        android:width="1.5dp"
+        android:color="#40FFFFFF" />
+    <corners android:radius="24dp" />
 </shape>

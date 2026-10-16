@@ -30,8 +30,8 @@
             android:id="@+id/tvHeaderTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="@font/manrope_variable"
-            android:letterSpacing="0.1"
+            android:fontFamily="@font/spotify_circular_medium"
+            android:letterSpacing="0.08"
             android:text="@string/now_playing"
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
@@ -119,13 +119,13 @@
                     android:id="@+id/lyricsSyncOffsetBar"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="6dp"
                     android:background="@drawable/bg_pill_sort"
-                    android:backgroundTint="@color/surface_card"
+                    android:backgroundTint="#400A0E24"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
                     android:paddingTop="3dp"
                     android:paddingBottom="3dp"
                     app:layout_constraintEnd_toEndOf="parent"
@@ -137,17 +137,18 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="?attr/selectableItemBackgroundBorderless"
+                        android:fontFamily="@font/spotify_circular_bold"
                         android:padding="6dp"
                         android:text="-0.5s"
                         android:textColor="@color/neon_cyan"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
+                        android:textSize="12sp" />
 
                     <TextView
                         android:id="@+id/tvCurrentOffset"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="?attr/selectableItemBackgroundBorderless"
+                        android:fontFamily="@font/spotify_circular_medium"
                         android:paddingStart="8dp"
                         android:paddingEnd="8dp"
                         android:text="Sync: 0.0s"
@@ -159,11 +160,11 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="?attr/selectableItemBackgroundBorderless"
+                        android:fontFamily="@font/spotify_circular_bold"
                         android:padding="6dp"
                         android:text="+0.5s"
                         android:textColor="@color/neon_cyan"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
+                        android:textSize="12sp" />
 
                     <TextView
                         android:id="@+id/btnOffsetReset"
@@ -171,17 +172,22 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="4dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
+                        android:fontFamily="@font/spotify_circular_medium"
                         android:padding="6dp"
                         android:text="Reset"
                         android:textColor="@color/text_tertiary"
                         android:textSize="11sp" />
                 </LinearLayout>
 
-                <!-- Glassmorphism frosted-glass wrapper around lyrics list -->
+                <!-- Glassmorphism frosted-glass card wrapper around lyrics list -->
                 <FrameLayout
                     android:id="@+id/lyricsGlassContainer"
                     android:layout_width="0dp"
                     android:layout_height="0dp"
+                    android:layout_marginStart="14dp"
+                    android:layout_marginEnd="14dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="4dp"
                     android:background="@drawable/bg_lyrics_glass"
                     android:clipToOutline="true"
                     app:layout_constraintBottom_toBottomOf="parent"
@@ -194,8 +200,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:clipToPadding="false"
-                        android:paddingTop="180dp"
-                        android:paddingBottom="220dp"
+                        android:paddingTop="90dp"
+                        android:paddingBottom="130dp"
                         android:overScrollMode="never" />
 
                 </FrameLayout>
@@ -260,7 +266,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:ellipsize="marquee"
-                android:fontFamily="@font/manrope_variable"
+                android:fontFamily="@font/spotify_circular_bold"
                 android:marqueeRepeatLimit="marquee_forever"
                 android:singleLine="true"
                 android:text="@string/unknown_title"
@@ -276,7 +282,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
-                android:fontFamily="@font/manrope_variable"
+                android:fontFamily="@font/spotify_circular_medium"
                 android:singleLine="true"
                 android:text="@string/unknown_artist"
                 android:textColor="@color/text_secondary"
@@ -329,7 +335,7 @@
                 android:id="@+id/tvCurrentTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="@font/manrope_variable"
+                android:fontFamily="@font/spotify_circular_medium"
                 android:text="@string/time_zero"
                 android:textColor="@color/text_tertiary"
                 android:textSize="12sp"
@@ -340,7 +346,7 @@
                 android:id="@+id/tvTotalDuration"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="@font/manrope_variable"
+                android:fontFamily="@font/spotify_circular_medium"
                 android:text="@string/time_zero"
                 android:textColor="@color/text_tertiary"
                 android:textSize="12sp"

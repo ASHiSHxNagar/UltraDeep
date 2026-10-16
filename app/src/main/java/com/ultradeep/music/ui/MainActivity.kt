@@ -133,8 +133,13 @@ class MainActivity : AppCompatActivity() {
         songAdapter = SongAdapter(
             onSongClicked = { song, queue ->
                 MusicController.playSong(song, queue)
-                val nowPlayingSheet = NowPlayingBottomSheet()
-                nowPlayingSheet.show(supportFragmentManager, NowPlayingBottomSheet.TAG)
+                if (!supportFragmentManager.isStateSaved && !isFinishing && !isDestroyed) {
+                    val existing = supportFragmentManager.findFragmentByTag(NowPlayingBottomSheet.TAG)
+                    if (existing == null || !existing.isAdded) {
+                        val nowPlayingSheet = NowPlayingBottomSheet()
+                        nowPlayingSheet.show(supportFragmentManager, NowPlayingBottomSheet.TAG)
+                    }
+                }
             },
             onSongMoreClicked = { song ->
                 showSongOptionsBottomSheet(song)
@@ -149,8 +154,13 @@ class MainActivity : AppCompatActivity() {
         val playlistDao = UltraDeepApplication.instance.database.playlistDao()
         playlistAdapter = PlaylistAdapter(
             onPlaylistClicked = { playlist ->
-                val detailSheet = com.ultradeep.music.ui.playlist.PlaylistDetailBottomSheet(playlist)
-                detailSheet.show(supportFragmentManager, com.ultradeep.music.ui.playlist.PlaylistDetailBottomSheet.TAG)
+                if (!supportFragmentManager.isStateSaved && !isFinishing && !isDestroyed) {
+                    val existing = supportFragmentManager.findFragmentByTag(com.ultradeep.music.ui.playlist.PlaylistDetailBottomSheet.TAG)
+                    if (existing == null || !existing.isAdded) {
+                        val detailSheet = com.ultradeep.music.ui.playlist.PlaylistDetailBottomSheet(playlist)
+                        detailSheet.show(supportFragmentManager, com.ultradeep.music.ui.playlist.PlaylistDetailBottomSheet.TAG)
+                    }
+                }
             },
             onDeleteClicked = { playlist ->
                 lifecycleScope.launch {
@@ -184,10 +194,12 @@ class MainActivity : AppCompatActivity() {
         val mini = binding.miniPlayerLayout
 
         val openNowPlaying = {
-            val existing = supportFragmentManager.findFragmentByTag(NowPlayingBottomSheet.TAG)
-            if (existing == null || !existing.isAdded) {
-                val sheet = NowPlayingBottomSheet()
-                sheet.show(supportFragmentManager, NowPlayingBottomSheet.TAG)
+            if (!supportFragmentManager.isStateSaved && !isFinishing && !isDestroyed) {
+                val existing = supportFragmentManager.findFragmentByTag(NowPlayingBottomSheet.TAG)
+                if (existing == null || !existing.isAdded) {
+                    val sheet = NowPlayingBottomSheet()
+                    sheet.show(supportFragmentManager, NowPlayingBottomSheet.TAG)
+                }
             }
         }
 
@@ -211,7 +223,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnSort.setOnClickListener {
-            showSortDialog()
+            if (!isFinishing && !isDestroyed) {
+                showSortDialog()
+            }
         }
 
         binding.btnQuickRandomize.setOnClickListener {
@@ -221,20 +235,35 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnSettings.setOnClickListener {
-            val settingsSheet = SettingsBottomSheet {
-                scanLocalAudio()
+            if (!supportFragmentManager.isStateSaved && !isFinishing && !isDestroyed) {
+                val existing = supportFragmentManager.findFragmentByTag(SettingsBottomSheet.TAG)
+                if (existing == null || !existing.isAdded) {
+                    val settingsSheet = SettingsBottomSheet {
+                        scanLocalAudio()
+                    }
+                    settingsSheet.show(supportFragmentManager, SettingsBottomSheet.TAG)
+                }
             }
-            settingsSheet.show(supportFragmentManager, SettingsBottomSheet.TAG)
         }
 
         binding.btnLyricsSync.setOnClickListener {
-            SettingsBottomSheet({ scanLocalAudio() }, openLyricsSyncSection = true)
-                .show(supportFragmentManager, SettingsBottomSheet.TAG)
+            if (!supportFragmentManager.isStateSaved && !isFinishing && !isDestroyed) {
+                val existing = supportFragmentManager.findFragmentByTag(SettingsBottomSheet.TAG)
+                if (existing == null || !existing.isAdded) {
+                    SettingsBottomSheet({ scanLocalAudio() }, openLyricsSyncSection = true)
+                        .show(supportFragmentManager, SettingsBottomSheet.TAG)
+                }
+            }
         }
 
         binding.fabAddPlaylist.setOnClickListener {
-            val dialog = CreatePlaylistDialog {}
-            dialog.show(supportFragmentManager, CreatePlaylistDialog.TAG)
+            if (!supportFragmentManager.isStateSaved && !isFinishing && !isDestroyed) {
+                val existing = supportFragmentManager.findFragmentByTag(CreatePlaylistDialog.TAG)
+                if (existing == null || !existing.isAdded) {
+                    val dialog = CreatePlaylistDialog {}
+                    dialog.show(supportFragmentManager, CreatePlaylistDialog.TAG)
+                }
+            }
         }
 
         binding.etSearch.doAfterTextChanged { text ->
@@ -448,10 +477,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSongOptionsBottomSheet(song: Song) {
-        val optionsSheet = com.ultradeep.music.ui.options.SongOptionsBottomSheet(song) {
-            applyFilterAndSort()
+        if (!supportFragmentManager.isStateSaved && !isFinishing && !isDestroyed) {
+            val existing = supportFragmentManager.findFragmentByTag(com.ultradeep.music.ui.options.SongOptionsBottomSheet.TAG)
+            if (existing == null || !existing.isAdded) {
+                val optionsSheet = com.ultradeep.music.ui.options.SongOptionsBottomSheet(song) {
+                    applyFilterAndSort()
+                }
+                optionsSheet.show(supportFragmentManager, com.ultradeep.music.ui.options.SongOptionsBottomSheet.TAG)
+            }
         }
-        optionsSheet.show(supportFragmentManager, com.ultradeep.music.ui.options.SongOptionsBottomSheet.TAG)
     }
 
     override fun onStop() {

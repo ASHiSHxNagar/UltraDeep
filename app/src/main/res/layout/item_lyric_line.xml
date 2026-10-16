@@ -12,7 +12,7 @@
         android:id="@+id/tvLyricLine"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fontFamily="@font/manrope_variable"
+        android:fontFamily="@font/spotify_circular_bold"
         android:textStyle="bold"
         android:breakStrategy="balanced"
         android:hyphenationFrequency="none"
@@ -21,6 +21,6 @@
         android:text="Lyric Line"
         android:textColor="#FFFFFF"
         android:textSize="26sp"
-        android:letterSpacing="-0.015" />
+        android:letterSpacing="-0.02" />
 
 </FrameLayout>

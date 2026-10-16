@@ -39,6 +39,7 @@ import com.ultradeep.music.ui.adapter.LyricsAdapter
 import com.ultradeep.music.ui.lyrics.EditLyricsBottomSheet
 import com.ultradeep.music.util.ArtworkManager
 import com.ultradeep.music.util.PaletteUtil
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -63,10 +64,16 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         if (speedHoldArmed && MusicController.isPlaying.value) {
             isSpeedHoldActive = true
             MusicController.setPlaybackSpeed(2f)
-            binding.tvHeaderTitle.text = "2× SPEED"
-            binding.contentContainer.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            _binding?.tvHeaderTitle?.text = "2× SPEED"
+            _binding?.contentContainer?.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         }
     }
+
+    private var userScrollResumeRunnable: Runnable? = null
+    private val userScrollResumeDelayMs = 3500L
+    private var paletteJob: Job? = null
+    private var favoriteJob: Job? = null
+    private var lyricsJob: Job? = null
 
     private lateinit var prefs: SharedPreferences
 
@@ -117,17 +124,30 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun setupLyricsRecyclerView() {
+        val ctx = context ?: return
         lyricsAdapter = LyricsAdapter { timestampMs ->
             val seekTarget = (timestampMs + currentSongOffsetMs).coerceAtLeast(0L)
             MusicController.seekTo(seekTarget)
         }
 
         binding.rvLyrics.apply {
-            layoutManager = LinearLayoutManager(requireContext())
+            layoutManager = LinearLayoutManager(ctx)
             adapter = lyricsAdapter
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                    lyricsAdapter.setUserScrolling(newState != RecyclerView.SCROLL_STATE_IDLE)
+                    if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                        lyricsAdapter.setUserScrolling(true)
+                        userScrollResumeRunnable?.let { recyclerView.removeCallbacks(it) }
+                    } else if (newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                        lyricsAdapter.setUserScrolling(true)
+                    } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        userScrollResumeRunnable?.let { recyclerView.removeCallbacks(it) }
+                        val resumeTask = Runnable {
+                            lyricsAdapter.setUserScrolling(false)
+                        }
+                        userScrollResumeRunnable = resumeTask
+                        recyclerView.postDelayed(resumeTask, userScrollResumeDelayMs)
+                    }
                 }
             })
         }
@@ -139,8 +159,13 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         }
 
         binding.btnQueue.setOnClickListener {
-            val queueSheet = QueueBottomSheet()
-            queueSheet.show(parentFragmentManager, QueueBottomSheet.TAG)
+            if (!parentFragmentManager.isStateSaved) {
+                val existing = parentFragmentManager.findFragmentByTag(QueueBottomSheet.TAG)
+                if (existing == null || !existing.isAdded) {
+                    val queueSheet = QueueBottomSheet()
+                    queueSheet.show(parentFragmentManager, QueueBottomSheet.TAG)
+                }
+            }
         }
 
         binding.btnPlayPause.setOnClickListener {
@@ -169,11 +194,16 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         binding.btnEditLyrics.setOnClickListener {
             val currentSong = MusicController.currentSong.value ?: return@setOnClickListener
-            val editDialog = EditLyricsBottomSheet(currentSong, rawLyricsCache) {
-                // Refresh lyrics immediately after edit
-                loadLyricsForSong(currentSong, forceRefresh = true)
+            if (!parentFragmentManager.isStateSaved) {
+                val existing = parentFragmentManager.findFragmentByTag(EditLyricsBottomSheet.TAG)
+                if (existing == null || !existing.isAdded) {
+                    val editDialog = EditLyricsBottomSheet(currentSong, rawLyricsCache) {
+                        // Refresh lyrics immediately after edit
+                        loadLyricsForSong(currentSong, forceRefresh = true)
+                    }
+                    editDialog.show(parentFragmentManager, EditLyricsBottomSheet.TAG)
+                }
             }
-            editDialog.show(parentFragmentManager, EditLyricsBottomSheet.TAG)
         }
 
         binding.btnFavorite.setOnClickListener {
@@ -211,14 +241,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                 if (fromUser) {
                     val duration = MusicController.duration.value
                     val targetMs = (progress / 1000f * duration).toLong()
-                    binding.tvCurrentTime.text = formatTime(targetMs)
-                    lyricsAdapter.updatePosition(
-                        targetMs,
-                        binding.rvLyrics,
-                        currentSongOffsetMs,
-                        forceScroll = true,
-                        immediate = true
-                    )
+                    _binding?.tvCurrentTime?.text = formatTime(targetMs)
                 }
             }
 
@@ -232,23 +255,26 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
                 val progress = seekBar?.progress ?: 0
                 val targetMs = if (duration > 0) (progress / 1000f * duration).toLong() else 0L
                 MusicController.seekTo(targetMs)
-                lyricsAdapter.updatePosition(
-                    targetMs,
-                    binding.rvLyrics,
-                    currentSongOffsetMs,
-                    forceScroll = true,
-                    immediate = true
-                )
+                _binding?.let { b ->
+                    lyricsAdapter.updatePosition(
+                        targetMs,
+                        b.rvLyrics,
+                        currentSongOffsetMs,
+                        forceScroll = true,
+                        immediate = true
+                    )
+                }
             }
         })
     }
 
     private fun setupSwipeGestures() {
+        val ctx = context ?: return
         val swipeThreshold = 80
         val swipeVelocityThreshold = 100
 
         // Gesture detector for Artwork view: swipe left triggers lyrics
-        val artworkGestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
+        val artworkGestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
             override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
                 if (e1 == null) return false
                 val diffX = e1.x - e2.x
@@ -262,7 +288,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         })
 
         // Gesture detector for Lyrics view: swipe right triggers artwork
-        val lyricsGestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
+        val lyricsGestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
             override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
                 if (e1 == null) return false
                 val diffX = e2.x - e1.x
@@ -281,28 +307,13 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             true
         }
 
-        binding.lyricsViewLayout.setOnTouchListener { view, event ->
-            handleSpeedHold(view, event)
+        binding.lyricsViewLayout.setOnTouchListener { _, event ->
             lyricsGestureDetector.onTouchEvent(event)
         }
-
-        // RecyclerView consumes its own touch stream, so it needs the same handler for
-        // the top-right lyrics area while keeping vertical lyric scrolling intact.
-        binding.rvLyrics.setOnTouchListener { view, event ->
-            handleSpeedHold(view, event)
-            false
-        }
-
-        // Also intercept horizontal swipe right on the lyrics recyclerview without breaking vertical scroll
-        binding.rvLyrics.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
-            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
-                return lyricsGestureDetector.onTouchEvent(e)
-            }
-        })
     }
 
     /**
-     * Holding the top-right 40% x 40% of artwork/lyrics temporarily plays at 2×.
+     * Holding the top-right 40% x 40% of artwork temporarily plays at 2×.
      * A normal touch, scroll or swipe never changes speed; releasing always restores 1×.
      */
     private fun handleSpeedHold(view: View, event: MotionEvent) {
@@ -324,14 +335,16 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         view?.removeCallbacks(speedHoldRunnable)
         speedHoldHost?.removeCallbacks(speedHoldRunnable)
         speedHoldHost = null
-        binding.contentContainer.removeCallbacks(speedHoldRunnable)
-        binding.rvLyrics.removeCallbacks(speedHoldRunnable)
-        speedHoldArmed = false
-        if (isSpeedHoldActive) {
-            isSpeedHoldActive = false
-            MusicController.setPlaybackSpeed(1f)
-            binding.tvHeaderTitle.setText(R.string.now_playing)
+        _binding?.let { b ->
+            b.contentContainer.removeCallbacks(speedHoldRunnable)
+            b.rvLyrics.removeCallbacks(speedHoldRunnable)
+            if (isSpeedHoldActive) {
+                isSpeedHoldActive = false
+                MusicController.setPlaybackSpeed(1f)
+                b.tvHeaderTitle.setText(R.string.now_playing)
+            }
         }
+        speedHoldArmed = false
     }
 
     private fun adjustSyncOffset(deltaMs: Long) {
@@ -428,74 +441,80 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
     private fun toggleLyricsMode(showLyrics: Boolean) {
         if (isLyricsModeActive == showLyrics) return
+        val b = _binding ?: return
         isLyricsModeActive = showLyrics
-        val width = binding.contentContainer.width.toFloat().let { if (it > 0) it else 1000f }
+        val width = b.contentContainer.width.toFloat().let { if (it > 0) it else 1000f }
+
+        b.artworkViewLayout.animate().cancel()
+        b.lyricsViewLayout.animate().cancel()
 
         if (showLyrics) {
             // Animate Artwork sliding LEFT out, Lyrics sliding in from RIGHT
-            binding.lyricsViewLayout.translationX = width
-            binding.lyricsViewLayout.alpha = 0f
-            binding.lyricsViewLayout.visibility = View.VISIBLE
+            b.lyricsViewLayout.translationX = width
+            b.lyricsViewLayout.alpha = 0f
+            b.lyricsViewLayout.visibility = View.VISIBLE
 
-            binding.artworkViewLayout.animate()
+            b.artworkViewLayout.animate()
                 .translationX(-width)
                 .alpha(0f)
                 .setDuration(280)
                 .withEndAction {
-                    binding.artworkViewLayout.visibility = View.GONE
+                    _binding?.artworkViewLayout?.visibility = View.GONE
                 }
                 .start()
 
-            binding.lyricsViewLayout.animate()
+            b.lyricsViewLayout.animate()
                 .translationX(0f)
                 .alpha(1f)
                 .setDuration(280)
                 .start()
 
-            binding.btnToggleLyricsMode.text = getString(R.string.now_playing)
-            binding.btnToggleLyricsMode.setIconResource(R.drawable.ic_album)
+            b.btnToggleLyricsMode.text = getString(R.string.now_playing)
+            b.btnToggleLyricsMode.setIconResource(R.drawable.ic_album)
             updateIndicators(isLyrics = true)
         } else {
             // Animate Lyrics sliding RIGHT out, Artwork sliding in from LEFT
-            binding.artworkViewLayout.translationX = -width
-            binding.artworkViewLayout.alpha = 0f
-            binding.artworkViewLayout.visibility = View.VISIBLE
+            b.artworkViewLayout.translationX = -width
+            b.artworkViewLayout.alpha = 0f
+            b.artworkViewLayout.visibility = View.VISIBLE
 
-            binding.lyricsViewLayout.animate()
+            b.lyricsViewLayout.animate()
                 .translationX(width)
                 .alpha(0f)
                 .setDuration(280)
                 .withEndAction {
-                    binding.lyricsViewLayout.visibility = View.GONE
+                    _binding?.lyricsViewLayout?.visibility = View.GONE
                 }
                 .start()
 
-            binding.artworkViewLayout.animate()
+            b.artworkViewLayout.animate()
                 .translationX(0f)
                 .alpha(1f)
                 .setDuration(280)
                 .start()
 
-            binding.btnToggleLyricsMode.text = getString(R.string.lyrics_title)
-            binding.btnToggleLyricsMode.setIconResource(R.drawable.ic_lyrics)
+            b.btnToggleLyricsMode.text = getString(R.string.lyrics_title)
+            b.btnToggleLyricsMode.setIconResource(R.drawable.ic_lyrics)
             updateIndicators(isLyrics = false)
         }
     }
 
     private fun updateIndicators(isLyrics: Boolean) {
-        val activeColor = ContextCompat.getColor(requireContext(), R.color.neon_cyan)
-        val inactiveColor = ContextCompat.getColor(requireContext(), R.color.text_tertiary)
+        val ctx = context ?: return
+        val b = _binding ?: return
+        val activeColor = ContextCompat.getColor(ctx, R.color.neon_cyan)
+        val inactiveColor = ContextCompat.getColor(ctx, R.color.text_tertiary)
 
-        binding.dotArtwork.backgroundTintList = ColorStateList.valueOf(if (!isLyrics) activeColor else inactiveColor)
-        binding.dotLyrics.backgroundTintList = ColorStateList.valueOf(if (isLyrics) activeColor else inactiveColor)
+        b.dotArtwork.backgroundTintList = ColorStateList.valueOf(if (!isLyrics) activeColor else inactiveColor)
+        b.dotLyrics.backgroundTintList = ColorStateList.valueOf(if (isLyrics) activeColor else inactiveColor)
 
         val activeWidth = (16 * resources.displayMetrics.density).toInt()
         val inactiveWidth = (6 * resources.displayMetrics.density).toInt()
 
-        binding.dotArtwork.layoutParams = binding.dotArtwork.layoutParams.apply {
+        b.dotArtwork.layoutParams = b.dotArtwork.layoutParams.apply {
             width = if (!isLyrics) activeWidth else inactiveWidth
         }
-        binding.dotLyrics.layoutParams = binding.dotLyrics.layoutParams.apply {
+        b.dotLyrics.layoutParams = b.dotLyrics.layoutParams.apply {
             width = if (isLyrics) activeWidth else inactiveWidth
         }
     }
@@ -571,17 +590,24 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun updateSongUI(song: Song) {
-        if (!isAdded || _binding == null) return
+        val ctx = context ?: return
+        val b = _binding ?: return
+        if (!isAdded) return
+
+        paletteJob?.cancel()
+        favoriteJob?.cancel()
+        lyricsJob?.cancel()
+
         currentSongId = song.id
         currentSongOffsetMs = prefs.getLong("lyrics_offset_${song.id}", 0L)
         updateOffsetUI()
 
-        binding.tvTitle.text = song.title
-        binding.tvArtist.text = song.artist
+        b.tvTitle.text = song.title
+        b.tvArtist.text = song.artist
 
         // Load album art via ArtworkManager
-        val art = ArtworkManager.getArtworkForSong(requireContext(), song)
-        binding.ivAlbumArt.load(art) {
+        val art = ArtworkManager.getArtworkForSong(ctx, song)
+        b.ivAlbumArt.load(art) {
             crossfade(true)
             placeholder(R.drawable.bg_artwork_placeholder)
             error(R.drawable.bg_artwork_placeholder)
@@ -589,24 +615,25 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         // Extract palette ambient colors and illuminate the ambient glow
         val songIdSnapshot = song.id
-        viewLifecycleOwner.lifecycleScope.launch {
+        paletteJob = viewLifecycleOwner.lifecycleScope.launch {
             val artUri = if (art is Uri) art.toString() else null
-            val colors = PaletteUtil.extractColorsFromUri(requireContext(), artUri)
+            val colors = PaletteUtil.extractColorsFromUri(ctx, artUri)
             if (!isAdded || _binding == null || currentSongId != songIdSnapshot) return@launch
-            binding.ambientBackground.setAmbientColors(colors)
-            binding.ambientGlowView.setGlowColors(colors.topColor, colors.centerColor)
+            _binding?.ambientBackground?.setAmbientColors(colors)
+            _binding?.ambientGlowView?.setGlowColors(colors.topColor, colors.centerColor)
         }
 
         // Observe favorite state
         val favoriteDao = UltraDeepApplication.instance.database.favoriteDao()
-        viewLifecycleOwner.lifecycleScope.launch {
+        favoriteJob = viewLifecycleOwner.lifecycleScope.launch {
             favoriteDao.isFavorite(song.id).collectLatest { isFav ->
-                if (!isAdded || _binding == null) return@collectLatest
-                binding.btnFavorite.setImageResource(
+                val currentB = _binding ?: return@collectLatest
+                val currentCtx = context ?: return@collectLatest
+                currentB.btnFavorite.setImageResource(
                     if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart
                 )
-                binding.btnFavorite.imageTintList = ContextCompat.getColorStateList(
-                    requireContext(),
+                currentB.btnFavorite.imageTintList = ContextCompat.getColorStateList(
+                    currentCtx,
                     if (isFav) R.color.favorite_active else R.color.text_primary
                 )
             }
@@ -618,23 +645,27 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
     private fun loadLyricsForSong(song: Song, forceRefresh: Boolean) {
         lyricsRequestSongId = song.id
-        binding.tvLyricsStatus.visibility = View.VISIBLE
-        binding.tvLyricsStatus.text = "Loading saved lyrics…"
+        val b = _binding ?: return
+        b.tvLyricsStatus.visibility = View.VISIBLE
+        b.tvLyricsStatus.text = "Loading saved lyrics…"
 
         val repository = UltraDeepApplication.instance.lyricsRepository
-        viewLifecycleOwner.lifecycleScope.launch {
+        lyricsJob?.cancel()
+        lyricsJob = viewLifecycleOwner.lifecycleScope.launch {
             // Playback never starts a network request on its own. Fetching is explicit
             // from the track menu or the Settings bulk actions, and every successful
             // response is persisted before this screen renders it.
             if (!repository.hasSavedLyrics(song.id)) {
+                val currentB = _binding ?: return@launch
                 if (isAdded && lyricsRequestSongId == song.id && currentSongId == song.id) {
                     rawLyricsCache = ""
-                    lyricsAdapter.submitLines(emptyList(), binding.rvLyrics)
-                    binding.tvLyricsStatus.text = "Lyrics not saved yet • use Fetch lyrics in the track menu"
+                    lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
+                    currentB.tvLyricsStatus.text = "Lyrics not saved yet • use Fetch lyrics in the track menu"
                 }
                 return@launch
             }
             val result = repository.getLyrics(song, forceRefresh)
+            val currentB = _binding ?: return@launch
             // Requests can finish out of order when the user skips quickly.
             if (!isAdded || lyricsRequestSongId != song.id || currentSongId != song.id) return@launch
             rawLyricsCache = if (result.isSynced) {
@@ -647,20 +678,20 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
             } else result.plainText
 
             if (result.isInstrumental) {
-                binding.tvLyricsStatus.visibility = View.VISIBLE
-                binding.tvLyricsStatus.text = getString(R.string.lyrics_instrumental)
-                lyricsAdapter.submitLines(emptyList(), binding.rvLyrics)
+                currentB.tvLyricsStatus.visibility = View.VISIBLE
+                currentB.tvLyricsStatus.text = getString(R.string.lyrics_instrumental)
+                lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
             } else if (result.lines.isEmpty()) {
-                binding.tvLyricsStatus.visibility = View.VISIBLE
-                binding.tvLyricsStatus.text = getString(R.string.lyrics_none)
-                lyricsAdapter.submitLines(emptyList(), binding.rvLyrics)
+                currentB.tvLyricsStatus.visibility = View.VISIBLE
+                currentB.tvLyricsStatus.text = getString(R.string.lyrics_none)
+                lyricsAdapter.submitLines(emptyList(), currentB.rvLyrics)
             } else {
-                binding.tvLyricsStatus.visibility = View.GONE
-                lyricsAdapter.submitLines(result.lines, binding.rvLyrics)
+                currentB.tvLyricsStatus.visibility = View.GONE
+                lyricsAdapter.submitLines(result.lines, currentB.rvLyrics)
                 updateOffsetUI()
                 lyricsAdapter.updatePosition(
                     MusicController.currentPosition.value,
-                    binding.rvLyrics,
+                    currentB.rvLyrics,
                     currentSongOffsetMs,
                     forceScroll = true,
                     immediate = true
@@ -689,6 +720,15 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     }
 
     override fun onDestroyView() {
+        _binding?.let { b ->
+            userScrollResumeRunnable?.let { b.rvLyrics.removeCallbacks(it) }
+            b.artworkViewLayout.animate().cancel()
+            b.lyricsViewLayout.animate().cancel()
+        }
+        userScrollResumeRunnable = null
+        paletteJob?.cancel()
+        favoriteJob?.cancel()
+        lyricsJob?.cancel()
         stopSpeedHold()
         super.onDestroyView()
         _binding = null
