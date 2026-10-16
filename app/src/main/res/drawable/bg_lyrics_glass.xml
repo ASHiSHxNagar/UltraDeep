@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spotify-style glassmorphism background for the lyrics container.
+     A very subtle semi-transparent dark rounded rectangle that lets the
+     fluid ambient orbs bleed through while keeping lyrics legible. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1AFFFFFF" />
+    <corners android:radius="24dp" />
+</shape>

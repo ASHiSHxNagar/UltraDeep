@@ -66,11 +66,8 @@ class LyricsAdapter(
                 if (immediate || kotlin.math.abs(newIndex - oldIndex) > 2) {
                     // Instant accurate jump to exact vertical center during seeking
                     if (layoutManager != null) {
-                        // Post until RecyclerView has measured its padded lyric viewport.
-                        // This preserves the centre position even after a large seek near
-                        // the final line, where the old immediate jump could land at end.
                         recyclerView.post {
-                            val centerOffset = (recyclerView.height / 2) - (28 * recyclerView.resources.displayMetrics.density).toInt()
+                            val centerOffset = (recyclerView.height / 2) - (32 * recyclerView.resources.displayMetrics.density).toInt()
                             layoutManager.scrollToPositionWithOffset(activeIndex, centerOffset)
                         }
                     }
@@ -100,7 +97,7 @@ class LyricsAdapter(
             }
 
             override fun calculateSpeedPerPixel(displayMetrics: DisplayMetrics): Float {
-                return 35f / displayMetrics.densityDpi
+                return 30f / displayMetrics.densityDpi
             }
         }
 
@@ -148,40 +145,68 @@ class LyricsAdapter(
             tvLine.text = line.text
             tvLine.animate().cancel()
             itemView.animate().cancel()
+
             if (isActive) {
-                // The active line rises into focus; the former current line shrinks away
-                // on its next bind, echoing the compact Spotify-style lyric motion.
+                // ── Active line: Spotify-style large bold white ──────────────
                 tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_primary))
-                tvLine.textSize = 28f
-                tvLine.typeface = Typeface.create(ResourcesCompat.getFont(itemView.context, R.font.manrope_variable), Typeface.BOLD)
+                tvLine.textSize = 30f
+                tvLine.typeface = Typeface.create(
+                    ResourcesCompat.getFont(itemView.context, R.font.manrope_variable),
+                    Typeface.BOLD
+                )
                 tvLine.alpha = 1.0f
-                tvLine.scaleX = 0.86f
-                tvLine.scaleY = 0.86f
-                itemView.scaleX = 0.94f
-                itemView.scaleY = 0.94f
-                itemView.translationY = 14f
-                tvLine.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(280).start()
-                itemView.animate().translationY(0f).scaleX(1f).scaleY(1f).setDuration(240).start()
+                // Pop-in scale: start slightly small & grow to full
+                if (!wasActive) {
+                    tvLine.scaleX = 0.88f
+                    tvLine.scaleY = 0.88f
+                    itemView.translationY = 10f
+                }
+                tvLine.animate()
+                    .scaleX(1f).scaleY(1f).alpha(1f)
+                    .setDuration(260)
+                    .start()
+                itemView.animate()
+                    .translationY(0f)
+                    .setDuration(220)
+                    .start()
+
             } else {
+                // ── Inactive lines: muted, smaller, italic on extreme distance ─
                 tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_inactive_lyric))
-                tvLine.textSize = 23f
-                tvLine.typeface = Typeface.create(ResourcesCompat.getFont(itemView.context, R.font.manrope_variable), Typeface.NORMAL)
-                // The lines immediately around the active lyric provide context, so they
-                // stay legible rather than fading into a dark artwork background.
-                val inactiveAlpha = when (distanceToActive) {
-                    1 -> 0.96f
-                    2 -> 0.88f
-                    else -> 0.76f
+
+                // Scale text and alpha progressively away from active line
+                val (textSizeSp, targetAlpha, targetScaleX, targetScaleY) = when (distanceToActive) {
+                    1    -> Quad(26f, 0.90f, 0.96f, 0.96f)
+                    2    -> Quad(24f, 0.72f, 0.92f, 0.92f)
+                    3    -> Quad(22f, 0.52f, 0.88f, 0.88f)
+                    else -> Quad(20f, 0.36f, 0.84f, 0.84f)
                 }
-                tvLine.alpha = inactiveAlpha
-                tvLine.scaleX = if (wasActive) 1f else 0.90f
-                tvLine.scaleY = if (wasActive) 1f else 0.90f
+
+                tvLine.textSize = textSizeSp
+                tvLine.typeface = Typeface.create(
+                    ResourcesCompat.getFont(itemView.context, R.font.manrope_variable),
+                    Typeface.NORMAL
+                )
+
                 if (wasActive) {
-                    tvLine.animate().scaleX(0.90f).scaleY(0.90f).alpha(inactiveAlpha).setDuration(200).start()
+                    // Animate out from active state
+                    tvLine.animate()
+                        .scaleX(targetScaleX)
+                        .scaleY(targetScaleY)
+                        .alpha(targetAlpha)
+                        .setDuration(220)
+                        .start()
+                } else {
+                    tvLine.scaleX = targetScaleX
+                    tvLine.scaleY = targetScaleY
+                    tvLine.alpha = targetAlpha
                 }
-                itemView.animate().translationY(0f).scaleX(0.96f).scaleY(0.96f).setDuration(180).start()
+                itemView.animate().translationY(0f).setDuration(180).start()
             }
             wasActive = isActive
         }
+
+        // Simple data holder to avoid destructuring 4+ Pair nesting
+        private data class Quad(val size: Float, val alpha: Float, val scaleX: Float, val scaleY: Float)
     }
 }

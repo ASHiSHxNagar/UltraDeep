@@ -101,8 +101,19 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         setupLyricsRecyclerView()
         setupListeners()
         setupSwipeGestures()
+        setupAmbientTouchForwarding()
         observeMusicController()
         updateIndicators(isLyrics = false)
+    }
+
+    /** Forward finger position to the ambient background so the fluid blob follows the user's touch. */
+    private fun setupAmbientTouchForwarding() {
+        // The root ConstraintLayout sits inside DynamicAmbientView – we attach a touch listener
+        // there so every gesture (on artwork, lyrics, controls) feeds the ambient orb.
+        binding.root.setOnTouchListener { _, event ->
+            binding.ambientBackground.dispatchTouchEvent(event)
+            false   // Don't consume – let children handle clicks normally
+        }
     }
 
     private fun setupLyricsRecyclerView() {
@@ -492,7 +503,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
     private fun observeMusicController() {
         viewLifecycleOwner.lifecycleScope.launch {
             MusicController.currentSong.collectLatest { song ->
-                if (song != null) {
+                if (song != null && isAdded && _binding != null) {
                     updateSongUI(song)
                 }
             }
@@ -500,6 +511,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             MusicController.isPlaying.collectLatest { isPlaying ->
+                if (!isAdded || _binding == null) return@collectLatest
                 binding.btnPlayPause.setImageResource(
                     if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
                 )
@@ -508,6 +520,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             MusicController.currentPosition.collectLatest { posMs ->
+                if (!isAdded || _binding == null) return@collectLatest
                 if (!isUserTrackingSeekBar) {
                     val duration = MusicController.duration.value
                     if (duration > 0) {
@@ -524,12 +537,14 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             MusicController.duration.collectLatest { durationMs ->
+                if (!isAdded || _binding == null) return@collectLatest
                 binding.tvTotalDuration.text = formatTime(durationMs)
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             MusicController.repeatMode.collectLatest { mode ->
+                if (!isAdded || _binding == null) return@collectLatest
                 when (mode) {
                     Player.REPEAT_MODE_OFF -> {
                         binding.btnRepeat.setImageResource(R.drawable.ic_repeat)
@@ -549,12 +564,14 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             MusicController.isShuffle.collectLatest { shuffleOn ->
+                if (!isAdded || _binding == null) return@collectLatest
                 binding.btnShuffle.alpha = if (shuffleOn) 1.0f else 0.5f
             }
         }
     }
 
     private fun updateSongUI(song: Song) {
+        if (!isAdded || _binding == null) return
         currentSongId = song.id
         currentSongOffsetMs = prefs.getLong("lyrics_offset_${song.id}", 0L)
         updateOffsetUI()
@@ -571,9 +588,11 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         }
 
         // Extract palette ambient colors and illuminate the ambient glow
+        val songIdSnapshot = song.id
         viewLifecycleOwner.lifecycleScope.launch {
             val artUri = if (art is Uri) art.toString() else null
             val colors = PaletteUtil.extractColorsFromUri(requireContext(), artUri)
+            if (!isAdded || _binding == null || currentSongId != songIdSnapshot) return@launch
             binding.ambientBackground.setAmbientColors(colors)
             binding.ambientGlowView.setGlowColors(colors.topColor, colors.centerColor)
         }
@@ -582,6 +601,7 @@ class NowPlayingBottomSheet : BottomSheetDialogFragment() {
         val favoriteDao = UltraDeepApplication.instance.database.favoriteDao()
         viewLifecycleOwner.lifecycleScope.launch {
             favoriteDao.isFavorite(song.id).collectLatest { isFav ->
+                if (!isAdded || _binding == null) return@collectLatest
                 binding.btnFavorite.setImageResource(
                     if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart
                 )

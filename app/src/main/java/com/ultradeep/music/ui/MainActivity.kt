@@ -184,8 +184,11 @@ class MainActivity : AppCompatActivity() {
         val mini = binding.miniPlayerLayout
 
         mini.miniPlayerRoot.setOnClickListener {
-            val sheet = NowPlayingBottomSheet()
-            sheet.show(supportFragmentManager, NowPlayingBottomSheet.TAG)
+            // Prevent showing a new sheet if one is already open
+            if (supportFragmentManager.findFragmentByTag(NowPlayingBottomSheet.TAG) == null) {
+                val sheet = NowPlayingBottomSheet()
+                sheet.show(supportFragmentManager, NowPlayingBottomSheet.TAG)
+            }
         }
 
         mini.btnMiniPlayPause.setOnClickListener {

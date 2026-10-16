@@ -69,13 +69,13 @@ class WavyAmbientBorderView @JvmOverloads constructor(
     private fun setupAnimator() {
         animator?.cancel()
         animator = ValueAnimator.ofFloat(0f, 360000f).apply {
-            duration = 18000L
+            duration = 60000L
             repeatCount = ValueAnimator.INFINITE
             interpolator = LinearInterpolator()
             addUpdateListener { va ->
                 if (isPlaying) {
-                    animTime = (va.animatedValue as Float) * 0.02f
-                    sweepAngle = (sweepAngle + 5.5f) % 360f
+                    animTime = (va.animatedValue as Float) * 0.04f
+                    sweepAngle = (sweepAngle + 3.2f) % 360f
                     invalidate()
                 }
             }

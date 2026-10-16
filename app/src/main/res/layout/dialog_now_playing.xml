@@ -177,17 +177,28 @@
                         android:textSize="11sp" />
                 </LinearLayout>
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvLyrics"
+                <!-- Glassmorphism frosted-glass wrapper around lyrics list -->
+                <FrameLayout
+                    android:id="@+id/lyricsGlassContainer"
                     android:layout_width="0dp"
                     android:layout_height="0dp"
-                    android:clipToPadding="false"
-                    android:paddingTop="200dp"
-                    android:paddingBottom="240dp"
+                    android:background="@drawable/bg_lyrics_glass"
+                    android:clipToOutline="true"
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/lyricsSyncOffsetBar" />
+                    app:layout_constraintTop_toBottomOf="@id/lyricsSyncOffsetBar">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvLyrics"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false"
+                        android:paddingTop="180dp"
+                        android:paddingBottom="220dp"
+                        android:overScrollMode="never" />
+
+                </FrameLayout>
 
                 <TextView
                     android:id="@+id/tvLyricsStatus"
@@ -265,6 +276,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
+                android:fontFamily="@font/manrope_variable"
                 android:singleLine="true"
                 android:text="@string/unknown_artist"
                 android:textColor="@color/text_secondary"
