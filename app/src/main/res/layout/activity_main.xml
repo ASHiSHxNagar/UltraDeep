@@ -92,6 +92,9 @@
             app:boxStrokeWidthFocused="1dp"
             app:boxStrokeColor="@color/neon_cyan"
             app:hintEnabled="false"
+            app:endIconContentDescription="Clear search"
+            app:endIconMode="clear_text"
+            app:endIconTint="@color/text_secondary"
             app:startIconDrawable="@drawable/ic_search"
             app:startIconTint="@color/text_secondary">
 

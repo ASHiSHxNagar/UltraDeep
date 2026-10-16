@@ -1,7 +1,6 @@
 package com.ultradeep.music.ui.adapter
 
 import android.content.Context
-import android.graphics.Color
 import android.graphics.Typeface
 import android.util.DisplayMetrics
 import android.view.LayoutInflater
@@ -119,7 +118,11 @@ class LyricsAdapter(
 
     override fun onBindViewHolder(holder: LyricViewHolder, position: Int) {
         val line = lines[position]
-        holder.bind(line, position == activeIndex)
+        holder.bind(
+            line = line,
+            isActive = position == activeIndex,
+            distanceToActive = if (activeIndex >= 0) kotlin.math.abs(position - activeIndex) else Int.MAX_VALUE
+        )
     }
 
     override fun getItemCount(): Int = lines.size
@@ -140,7 +143,7 @@ class LyricsAdapter(
             }
         }
 
-        fun bind(line: LyricLine, isActive: Boolean) {
+        fun bind(line: LyricLine, isActive: Boolean, distanceToActive: Int) {
             tvLine.text = line.text
             tvLine.animate().cancel()
             itemView.animate().cancel()
@@ -162,11 +165,18 @@ class LyricsAdapter(
                 tvLine.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_inactive_lyric))
                 tvLine.textSize = 20f
                 tvLine.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-                tvLine.alpha = 0.65f
+                // The lines immediately around the active lyric provide context, so they
+                // stay legible rather than fading into a dark artwork background.
+                val inactiveAlpha = when (distanceToActive) {
+                    1 -> 0.94f
+                    2 -> 0.84f
+                    else -> 0.72f
+                }
+                tvLine.alpha = inactiveAlpha
                 tvLine.scaleX = if (wasActive) 1f else 0.90f
                 tvLine.scaleY = if (wasActive) 1f else 0.90f
                 if (wasActive) {
-                    tvLine.animate().scaleX(0.90f).scaleY(0.90f).alpha(0.65f).setDuration(200).start()
+                    tvLine.animate().scaleX(0.90f).scaleY(0.90f).alpha(inactiveAlpha).setDuration(200).start()
                 }
                 itemView.animate().translationY(0f).scaleX(0.96f).scaleY(0.96f).setDuration(180).start()
             }

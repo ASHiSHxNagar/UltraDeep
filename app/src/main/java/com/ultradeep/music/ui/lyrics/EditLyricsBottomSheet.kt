@@ -111,11 +111,13 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
             inputType = InputType.TYPE_CLASS_TEXT
             setSingleLine(true)
             setHorizontallyScrolling(true)
+            isHorizontalScrollBarEnabled = true
+            scrollBarStyle = View.SCROLLBARS_INSIDE_INSET
             textSize = 13f
             setTextColor(ContextCompat.getColor(context, R.color.text_primary))
             setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
             background = ContextCompat.getDrawable(context, R.drawable.bg_lyrics_editor)
-            setPadding(10, 0, 8, 0)
+            setPadding(16, 0, 12, 0)
             layoutParams = LinearLayout.LayoutParams((126 * resources.displayMetrics.density).toInt(), (48 * resources.displayMetrics.density).toInt())
         }
         val lyric = EditText(context).apply {
@@ -124,11 +126,13 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
             inputType = InputType.TYPE_CLASS_TEXT
             setSingleLine(true)
             setHorizontallyScrolling(true)
+            isHorizontalScrollBarEnabled = true
+            scrollBarStyle = View.SCROLLBARS_INSIDE_INSET
             textSize = 14f
             setTextColor(ContextCompat.getColor(context, R.color.text_primary))
             setHintTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
             background = ContextCompat.getDrawable(context, R.drawable.bg_lyrics_editor)
-            setPadding(10, 0, 8, 0)
+            setPadding(16, 0, 12, 0)
             layoutParams = LinearLayout.LayoutParams(0, (48 * resources.displayMetrics.density).toInt(), 1f).apply {
                 marginStart = (7 * resources.displayMetrics.density).toInt()
             }
@@ -140,7 +144,16 @@ class EditLyricsBottomSheet : BottomSheetDialogFragment {
 
     private fun setEditing(enabled: Boolean) {
         editing = enabled
-        rows.forEach { (time, lyric) -> time.isEnabled = enabled; lyric.isEnabled = enabled }
+        rows.forEach { (time, lyric) ->
+            // Keep read-only rows touchable so a long timestamp or lyric can still be
+            // horizontally scrolled; focus and editing stay disabled until Edit is tapped.
+            listOf(time, lyric).forEach { field ->
+                field.isEnabled = true
+                field.isFocusable = enabled
+                field.isFocusableInTouchMode = enabled
+                field.isCursorVisible = enabled
+            }
+        }
         binding.btnEditMode.visibility = if (enabled) View.GONE else View.VISIBLE
         binding.editActions.visibility = if (enabled) View.VISIBLE else View.GONE
         binding.btnAddLyricLine.visibility = if (enabled) View.VISIBLE else View.GONE

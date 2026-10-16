@@ -1,6 +1,7 @@
 package com.ultradeep.music.service
 
 import android.app.PendingIntent
+import android.app.Service
 import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -57,7 +58,12 @@ class PlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+        // Keep a genuinely playing track alive in the background. A paused, idle, or
+        // never-started session should not leave a stale media card after the app task
+        // is dismissed.
+        if (player == null || !player.isPlaying) {
+            player?.clearMediaItems()
+            stopForeground(Service.STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
     }

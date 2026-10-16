@@ -34,6 +34,7 @@
     <!-- Sorting -->
     <string name="sort_by">Sort By</string>
     <string name="sort_date_added">Date Added (Newest first)</string>
+    <string name="sort_date_added_oldest">Date Added (Oldest first)</string>
     <string name="sort_title">Title (A-Z)</string>
     <string name="sort_artist">Artist</string>
     <string name="sort_duration">Duration</string>

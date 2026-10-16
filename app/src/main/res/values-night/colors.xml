@@ -19,7 +19,8 @@
     <color name="text_primary">#FFFFFF</color>
     <color name="text_secondary">#B0B0C4</color>
     <color name="text_tertiary">#6E6E88</color>
-    <color name="text_inactive_lyric">#55556E</color>
+    <!-- Keep surrounding lyric lines readable over artwork-derived ambient backgrounds. -->
+    <color name="text_inactive_lyric">#B8B8CD</color>
     
     <!-- Status / Overlay -->
     <color name="overlay_scrim">#9908080C</color>

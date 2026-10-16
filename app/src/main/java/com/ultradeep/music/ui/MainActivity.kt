@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -221,6 +222,13 @@ class MainActivity : AppCompatActivity() {
             currentSearchQuery = text?.toString()?.trim() ?: ""
             applyFilterAndSort()
         }
+
+        binding.tilSearch.setEndIconOnClickListener {
+            binding.etSearch.text?.clear()
+            binding.etSearch.clearFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+                .hideSoftInputFromWindow(binding.etSearch.windowToken, 0)
+        }
     }
 
     private fun setupTabs() {
@@ -323,6 +331,7 @@ class MainActivity : AppCompatActivity() {
     private fun showSortDialog() {
         val options = arrayOf(
             getString(R.string.sort_date_added),
+            getString(R.string.sort_date_added_oldest),
             getString(R.string.sort_title),
             getString(R.string.sort_artist),
             getString(R.string.sort_duration),
@@ -331,10 +340,11 @@ class MainActivity : AppCompatActivity() {
 
         val selectedIndex = when (currentSortOption) {
             SortOption.DATE_ADDED_DESC -> 0
-            SortOption.TITLE_ASC -> 1
-            SortOption.ARTIST_ASC -> 2
-            SortOption.DURATION_DESC -> 3
-            SortOption.RANDOM -> 4
+            SortOption.DATE_ADDED_ASC -> 1
+            SortOption.TITLE_ASC -> 2
+            SortOption.ARTIST_ASC -> 3
+            SortOption.DURATION_DESC -> 4
+            SortOption.RANDOM -> 5
         }
 
         MaterialAlertDialogBuilder(this)
@@ -342,9 +352,10 @@ class MainActivity : AppCompatActivity() {
             .setSingleChoiceItems(options, selectedIndex) { dialog, which ->
                 currentSortOption = when (which) {
                     0 -> SortOption.DATE_ADDED_DESC
-                    1 -> SortOption.TITLE_ASC
-                    2 -> SortOption.ARTIST_ASC
-                    3 -> SortOption.DURATION_DESC
+                    1 -> SortOption.DATE_ADDED_ASC
+                    2 -> SortOption.TITLE_ASC
+                    3 -> SortOption.ARTIST_ASC
+                    4 -> SortOption.DURATION_DESC
                     else -> SortOption.RANDOM
                 }
                 applyFilterAndSort()
@@ -374,6 +385,10 @@ class MainActivity : AppCompatActivity() {
             SortOption.DATE_ADDED_DESC -> {
                 binding.tvActiveSort.text = getString(R.string.sort_date_added)
                 baseList.sortedByDescending { it.dateAdded }
+            }
+            SortOption.DATE_ADDED_ASC -> {
+                binding.tvActiveSort.text = getString(R.string.sort_date_added_oldest)
+                baseList.sortedBy { it.dateAdded }
             }
             SortOption.TITLE_ASC -> {
                 binding.tvActiveSort.text = getString(R.string.sort_title)
