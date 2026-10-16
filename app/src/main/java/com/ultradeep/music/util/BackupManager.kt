@@ -18,6 +18,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class RestoreSummary(
     val lyricsCount: Int,
@@ -26,42 +29,34 @@ data class RestoreSummary(
     val artworksCount: Int
 )
 
+/**
+ * Robust non-overwriting backup manager:
+ * - Every time the app opens (or user triggers backup), a dedicated folder is created:
+ *   Format: `UltraDeep - DD-MM-YY - HH.mm.ss`
+ *   Inside: `UltraDeep - DD-MM-YY - HH.mm.ss.json`
+ * - Previous backups are NEVER overwritten or replaced.
+ * - When reinstalled or selecting a folder on a clean install, the latest backup
+ *   is automatically detected and restored with zero data loss.
+ */
 object BackupManager {
 
     private const val AUTO_BACKUP_PREFS = "automatic_backup_prefs"
     private const val AUTO_BACKUP_TREE_URI = "backup_tree_uri"
-    private const val AUTO_BACKUP_FILE_NAME = "UltraDeep_AutoBackup.json"
     private val autoBackupMutex = Mutex()
+    private var lastBackupTimeMs = 0L
 
     data class AutoBackupSetupResult(
         val restored: RestoreSummary?,
         val written: Boolean,
-        val existingBackupProtected: Boolean = false
+        val backupFolderName: String? = null
     )
 
-    private data class BackupContents(
-        val lyrics: Int,
-        val offsets: Int,
-        val favorites: Int,
-        val playlists: Int,
-        val playlistSongs: Int,
-        val artworks: Int,
-        val hasGlobalArtwork: Boolean
-    ) {
-        val isEmpty: Boolean
-            get() = lyrics == 0 && offsets == 0 && favorites == 0 && playlists == 0 &&
-                playlistSongs == 0 && artworks == 0 && !hasGlobalArtwork
-
-        /** A backup with data absent locally must be restored before it can be replaced. */
-        fun containsDataMissingFrom(local: BackupContents): Boolean =
-            lyrics > local.lyrics ||
-                offsets > local.offsets ||
-                favorites > local.favorites ||
-                playlists > local.playlists ||
-                playlistSongs > local.playlistSongs ||
-                artworks > local.artworks ||
-                (hasGlobalArtwork && !local.hasGlobalArtwork)
-    }
+    data class DiscoveredBackup(
+        val fileUri: Uri,
+        val displayName: String,
+        val timestamp: Long,
+        val folderName: String
+    )
 
     fun hasAutoBackupFolder(context: Context): Boolean {
         val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
@@ -72,7 +67,16 @@ object BackupManager {
         }
     }
 
-    /** Stores a durable SAF folder grant and recovers a backup if this is a clean install. */
+    fun getAutoBackupFolderUri(context: Context): Uri? {
+        val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
+            .getString(AUTO_BACKUP_TREE_URI, null) ?: return null
+        return Uri.parse(uriText)
+    }
+
+    /**
+     * Stores the selected backup folder. If this is a fresh install (no local data),
+     * it immediately restores from the newest backup found in the folder.
+     */
     suspend fun selectAutoBackupFolder(context: Context, treeUri: Uri): AutoBackupSetupResult = withContext(Dispatchers.IO) {
         context.contentResolver.takePersistableUriPermission(
             treeUri,
@@ -81,175 +85,268 @@ object BackupManager {
         context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
             .edit().putString(AUTO_BACKUP_TREE_URI, treeUri.toString()).commit()
 
-        val existing = readAutoBackup(context, treeUri)
+        val latest = findLatestBackup(context, treeUri)
         val localHadData = hasLocalUserData(context)
-        val restored = if (!existing.isNullOrBlank() && !localHadData) {
-            restoreBackup(context, existing)
+
+        // If local had no data (clean install after uninstall) and a backup exists in folder, auto-restore:
+        val restored = if (!localHadData && latest != null) {
+            val json = readBackupFromUri(context, latest.fileUri)
+            if (!json.isNullOrBlank()) restoreBackup(context, json) else null
         } else null
-        val existingBackupProtected = restored == null && !existing.isNullOrBlank() &&
-            existingBackupHasDataMissingLocally(existing, context)
-        val written = if (existingBackupProtected) false else updateAutoBackup(context)
-        AutoBackupSetupResult(restored, written, existingBackupProtected)
+
+        // Now create a new backup folder snapshot if local data is present
+        val writtenFolder = if (hasLocalUserData(context)) {
+            writeNewAutoBackupFolder(context, treeUri)
+        } else null
+
+        AutoBackupSetupResult(
+            restored = restored,
+            written = writtenFolder != null,
+            backupFolderName = writtenFolder ?: latest?.folderName
+        )
     }
 
     /**
-     * Rewrites one stable JSON file only when it cannot discard data that is present in
-     * the existing backup. This runs at app launch and onStop, so it must be conservative.
+     * Triggered every time the user opens the app:
+     * - If local data is missing (clean install after reinstalling), restores from the newest backup.
+     * - If local data exists, creates a new unique snapshot folder `UltraDeep - DD-MM-YY - HH.mm.ss/`.
+     */
+    suspend fun performAppOpenBackup(context: Context): RestoreSummary? = autoBackupMutex.withLock {
+        withContext(Dispatchers.IO) {
+            if (!hasAutoBackupFolder(context)) return@withContext null
+            val treeUri = getAutoBackupFolderUri(context) ?: return@withContext null
+
+            // Clean install check: if local data is missing, restore from the latest backup!
+            if (!hasLocalUserData(context)) {
+                val latest = findLatestBackup(context, treeUri)
+                if (latest != null) {
+                    val content = readBackupFromUri(context, latest.fileUri)
+                    if (!content.isNullOrBlank()) {
+                        val summary = restoreBackup(context, content)
+                        return@withContext summary
+                    }
+                }
+                return@withContext null
+            }
+
+            // Normal app open with data: check debounce (avoid duplicates on rotation)
+            val now = System.currentTimeMillis()
+            if (now - lastBackupTimeMs < 15_000L) {
+                return@withContext null
+            }
+            lastBackupTimeMs = now
+
+            writeNewAutoBackupFolder(context, treeUri)
+            null
+        }
+    }
+
+    /**
+     * Explicitly creates a new timestamped backup folder and file.
      */
     suspend fun updateAutoBackup(context: Context): Boolean = autoBackupMutex.withLock {
         withContext(Dispatchers.IO) {
-            val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
-                .getString(AUTO_BACKUP_TREE_URI, null) ?: return@withContext false
-            val treeUri = Uri.parse(uriText)
+            val treeUri = getAutoBackupFolderUri(context) ?: return@withContext false
             val hasPermission = context.contentResolver.persistedUriPermissions.any {
                 it.uri == treeUri && it.isReadPermission && it.isWritePermission
             }
             if (!hasPermission) return@withContext false
-            writeAutoBackup(context, treeUri)
+            val folderName = writeNewAutoBackupFolder(context, treeUri)
+            folderName != null
         }
     }
 
     suspend fun restoreSelectedAutoBackup(context: Context): RestoreSummary? = withContext(Dispatchers.IO) {
-        val uriText = context.getSharedPreferences(AUTO_BACKUP_PREFS, Context.MODE_PRIVATE)
-            .getString(AUTO_BACKUP_TREE_URI, null) ?: return@withContext null
-        val contents = readAutoBackup(context, Uri.parse(uriText)) ?: return@withContext null
+        val treeUri = getAutoBackupFolderUri(context) ?: return@withContext null
+        val latest = findLatestBackup(context, treeUri) ?: return@withContext null
+        val contents = readBackupFromUri(context, latest.fileUri) ?: return@withContext null
         restoreBackup(context, contents)
     }
 
-    private suspend fun writeAutoBackup(context: Context, treeUri: Uri): Boolean {
+    /**
+     * Creates a new subfolder in the tree with format `UltraDeep - DD-MM-YY - HH.mm.ss`
+     * and a matching JSON file `UltraDeep - DD-MM-YY - HH.mm.ss.json` inside it.
+     */
+    private suspend fun writeNewAutoBackupFolder(context: Context, treeUri: Uri): String? {
         return try {
-            // Do not create an empty backup just because a new install opened once.
-            if (!hasLocalUserData(context)) return false
+            if (!hasLocalUserData(context)) return null
             val json = createBackupJson(context)
-            val existing = readAutoBackup(context, treeUri)
-            if (!existing.isNullOrBlank() && existingBackupHasDataMissingLocally(existing, context, json)) {
-                return false
-            }
-            // Preserve the previous valid state before replacing the stable file. This
-            // gives the user a recovery point even if a later backup is unwanted.
-            if (!existing.isNullOrBlank() && !sameBackupPayload(existing, json) &&
-                !archiveExistingAutoBackup(context, treeUri, existing)
-            ) {
-                return false
-            }
-            val documentUri = findAutoBackupDocument(context, treeUri, create = true) ?: return false
-            context.contentResolver.openOutputStream(documentUri, "wt")?.bufferedWriter()?.use { writer ->
+
+            val now = Date()
+            val folderDate = SimpleDateFormat("dd-MM-yy - HH.mm.ss", Locale.US).format(now)
+            val folderName = "UltraDeep - $folderDate"
+            val fileName = "$folderName.json"
+
+            val resolver = context.contentResolver
+            val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+            val parentDocumentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocumentId)
+
+            // 1. Create dedicated subfolder
+            val folderUri = DocumentsContract.createDocument(
+                resolver,
+                parentDocumentUri,
+                DocumentsContract.Document.MIME_TYPE_DIR,
+                folderName
+            ) ?: return null
+
+            val folderDocId = DocumentsContract.getDocumentId(folderUri)
+            val subFolderUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, folderDocId)
+
+            // 2. Create JSON file inside the subfolder
+            val fileUri = DocumentsContract.createDocument(
+                resolver,
+                subFolderUri,
+                "application/json",
+                fileName
+            ) ?: DocumentsContract.createDocument(
+                resolver,
+                folderUri,
+                "application/json",
+                fileName
+            ) ?: return null
+
+            // 3. Write backup JSON payload
+            resolver.openOutputStream(fileUri, "wt")?.bufferedWriter()?.use { writer ->
                 writer.write(json)
-            } ?: return false
-            true
-        } catch (error: Exception) {
-            error.printStackTrace()
-            false
-        }
-    }
+            } ?: return null
 
-    private fun readAutoBackup(context: Context, treeUri: Uri): String? {
-        return try {
-            val documentUri = findAutoBackupDocument(context, treeUri, create = false) ?: return null
-            context.contentResolver.openInputStream(documentUri)?.bufferedReader()?.use { it.readText() }
+            folderName
         } catch (error: Exception) {
             error.printStackTrace()
             null
         }
     }
 
-    private fun findAutoBackupDocument(context: Context, treeUri: Uri, create: Boolean): Uri? {
+    /**
+     * Scans the selected backup directory for all backup folders and files,
+     * identifying the newest / most recent backup.
+     */
+    fun findLatestBackup(context: Context, treeUri: Uri): DiscoveredBackup? {
         val resolver = context.contentResolver
-        val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocumentId)
-        resolver.query(
-            childrenUri,
-            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-            val nameColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-            while (cursor.moveToNext()) {
-                if (cursor.getString(nameColumn) == AUTO_BACKUP_FILE_NAME) {
-                    return DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idColumn))
+        val backups = mutableListOf<DiscoveredBackup>()
+
+        try {
+            val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+            val parentChildrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocumentId)
+
+            resolver.query(
+                parentChildrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    DocumentsContract.Document.COLUMN_LAST_MODIFIED
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                val modCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+
+                while (cursor.moveToNext()) {
+                    val docId = cursor.getString(idCol)
+                    val name = cursor.getString(nameCol) ?: ""
+                    val mime = cursor.getString(mimeCol) ?: ""
+                    val lastMod = cursor.getLong(modCol)
+
+                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        // Check if this is an UltraDeep backup folder
+                        if (name.startsWith("UltraDeep", ignoreCase = true)) {
+                            val subChildrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, docId)
+                            resolver.query(
+                                subChildrenUri,
+                                arrayOf(
+                                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                                    DocumentsContract.Document.COLUMN_LAST_MODIFIED
+                                ),
+                                null,
+                                null,
+                                null
+                            )?.use { subCursor ->
+                                val subIdCol = subCursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                                val subNameCol = subCursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                                val subModCol = subCursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+
+                                while (subCursor.moveToNext()) {
+                                    val subDocId = subCursor.getString(subIdCol)
+                                    val subName = subCursor.getString(subNameCol) ?: ""
+                                    val subMod = subCursor.getLong(subModCol)
+
+                                    if (subName.endsWith(".json", ignoreCase = true)) {
+                                        val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, subDocId)
+                                        val ts = parseTimestampFromName(name)
+                                            ?: parseTimestampFromName(subName)
+                                            ?: subMod.takeIf { it > 0 }
+                                            ?: lastMod
+                                        backups.add(DiscoveredBackup(fileUri, subName, ts, name))
+                                    }
+                                }
+                            }
+                        }
+                    } else if (name.endsWith(".json", ignoreCase = true) && name.startsWith("UltraDeep", ignoreCase = true)) {
+                        // Legacy single root backup file
+                        val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                        val ts = parseTimestampFromName(name) ?: lastMod
+                        backups.add(DiscoveredBackup(fileUri, name, ts, "Root"))
+                    }
                 }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        if (!create) return null
-        val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocumentId)
-        return DocumentsContract.createDocument(resolver, parentUri, "application/json", AUTO_BACKUP_FILE_NAME)
+
+        return backups.maxByOrNull { it.timestamp }
     }
 
-    private fun archiveExistingAutoBackup(context: Context, treeUri: Uri, contents: String): Boolean {
+    private fun parseTimestampFromName(name: String): Long? {
+        val formats = listOf(
+            SimpleDateFormat("dd-MM-yy - HH.mm.ss", Locale.US),
+            SimpleDateFormat("dd-MM-yy_HH-mm-ss", Locale.US),
+            SimpleDateFormat("dd-MM-yyyy - HH.mm.ss", Locale.US),
+            SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.US),
+            SimpleDateFormat("dd-MM-yy", Locale.US),
+            SimpleDateFormat("dd-MM-yyyy", Locale.US)
+        )
+        val clean = name.removePrefix("UltraDeep - ").removePrefix("UltraDeep_").removeSuffix(".json").trim()
+        for (format in formats) {
+            try {
+                format.isLenient = false
+                val date = format.parse(clean)
+                if (date != null) return date.time
+            } catch (_: Exception) {}
+        }
+        val match = Regex("\\d{12,13}").find(name)
+        if (match != null) {
+            return match.value.toLongOrNull()
+        }
+        return null
+    }
+
+    fun readBackupFromUri(context: Context, uri: Uri): String? {
         return try {
-            val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
-            val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocumentId)
-            val archiveName = "UltraDeep_AutoBackup_${System.currentTimeMillis()}.json"
-            val archiveUri = DocumentsContract.createDocument(
-                context.contentResolver,
-                parentUri,
-                "application/json",
-                archiveName
-            ) ?: return false
-            context.contentResolver.openOutputStream(archiveUri, "wt")?.bufferedWriter()?.use { writer ->
-                writer.write(contents)
-            } != null
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
         } catch (error: Exception) {
             error.printStackTrace()
-            false
+            null
         }
     }
 
-    private fun sameBackupPayload(firstJson: String, secondJson: String): Boolean {
-        return try {
-            JSONObject(firstJson).apply { remove("timestamp") }.toString() ==
-                JSONObject(secondJson).apply { remove("timestamp") }.toString()
-        } catch (error: Exception) {
-            false
-        }
-    }
-
-    private suspend fun hasLocalUserData(context: Context): Boolean {
+    suspend fun hasLocalUserData(context: Context): Boolean = withContext(Dispatchers.IO) {
         val db = UltraDeepApplication.instance.database
         if (db.lyricsDao().getAllLyrics().isNotEmpty() ||
             db.favoriteDao().getAllFavorites().isNotEmpty() ||
             db.playlistDao().getAllPlaylistsSync().isNotEmpty() ||
             db.playlistDao().getAllPlaylistSongsSync().isNotEmpty() ||
             ArtworkManager.getAllCustomArtworkFiles(context).isNotEmpty() ||
-            ArtworkManager.hasCustomGlobalDefault(context)) return true
+            ArtworkManager.hasCustomGlobalDefault(context)) return@withContext true
 
-        return context.getSharedPreferences("lyrics_timer_prefs", Context.MODE_PRIVATE)
+        context.getSharedPreferences("lyrics_timer_prefs", Context.MODE_PRIVATE)
             .all.keys.any { it.startsWith("lyrics_offset_") }
     }
-
-    private suspend fun existingBackupHasDataMissingLocally(
-        existingJson: String,
-        context: Context,
-        localJson: String? = null
-    ): Boolean {
-        return try {
-            val existingContents = backupContents(JSONObject(existingJson))
-            if (existingContents.isEmpty) return false
-            val localContents = backupContents(JSONObject(localJson ?: createBackupJson(context)))
-            existingContents.containsDataMissingFrom(localContents)
-        } catch (error: Exception) {
-            // A malformed existing file should not be replaced automatically either.
-            true
-        }
-    }
-
-    private fun backupContents(root: JSONObject): BackupContents = BackupContents(
-        lyrics = root.optJSONArray("lyrics")?.length() ?: 0,
-        offsets = root.optJSONObject("lyricsOffsets")?.length() ?: 0,
-        favorites = root.optJSONArray("favorites")?.length() ?: 0,
-        playlists = root.optJSONArray("playlists")?.length() ?: 0,
-        playlistSongs = root.optJSONArray("playlistSongs")?.length() ?: 0,
-        artworks = root.optJSONObject("customArtworks")?.length() ?: 0,
-        hasGlobalArtwork = root.opt("globalDefaultArtBase64")?.let { value ->
-            when (value) {
-                is Boolean -> value
-                is String -> value.isNotBlank()
-                else -> false
-            }
-        } ?: false
-    )
 
     suspend fun createBackupJson(context: Context): String = withContext(Dispatchers.IO) {
         val root = JSONObject()

@@ -37,9 +37,9 @@ class UltraDeepApplication : Application() {
         // Setup MediaStore ContentObserver for auto-syncing newly added songs
         setupMediaStoreObserver()
 
-        // Refresh the user-selected backup file whenever a new app process opens.
-        applicationScope.launch {
-            BackupManager.updateAutoBackup(this@UltraDeepApplication)
+        // Create a new backup folder on app open (or auto-restore if clean install)
+        applicationScope.launch(Dispatchers.IO) {
+            BackupManager.performAppOpenBackup(this@UltraDeepApplication)
         }
     }
 

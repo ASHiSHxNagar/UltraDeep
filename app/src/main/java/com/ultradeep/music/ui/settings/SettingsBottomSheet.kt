@@ -108,13 +108,13 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
                     val result = BackupManager.selectAutoBackupFolder(requireContext(), uri)
                     updateAutoBackupStatus()
                     val message = result.restored?.let {
-                        "Recovered ${it.lyricsCount} lyrics, ${it.favoritesCount} favorites and ${it.playlistsCount} playlists."
-                    } ?: if (result.existingBackupProtected) {
-                        "Existing backup kept safe. Tap Restore automatic backup before updating it."
+                        "Auto-recovered ${it.lyricsCount} lyrics, ${it.favoritesCount} favorites, and ${it.playlistsCount} playlists from backup!"
+                    } ?: if (result.written) {
+                        "Backup folder saved! Created: ${result.backupFolderName}"
                     } else "Automatic backup folder saved."
                     Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
-                    if (!result.written && !result.existingBackupProtected) {
-                        binding.tvAutoBackupStatus.text = "No local backup data yet, or the folder could not be written."
+                    if (result.restored != null) {
+                        onLibraryRescanned?.invoke()
                     }
                 } catch (error: Exception) {
                     binding.tvAutoBackupStatus.text = "Could not use this folder: ${error.localizedMessage ?: "permission denied"}"
@@ -209,7 +209,7 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
                 updateAutoBackupStatus()
                 Toast.makeText(
                     requireContext(),
-                    if (saved) "Backup updated" else "Backup kept safe: restore existing data before replacing it",
+                    if (saved) "New backup folder created!" else "No local data to back up yet",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -302,9 +302,9 @@ class SettingsBottomSheet : BottomSheetDialogFragment {
 
     private fun updateAutoBackupStatus() {
         binding.tvAutoBackupStatus.text = if (BackupManager.hasAutoBackupFolder(requireContext())) {
-            "Automatic backup is on. Choose this same folder again after reinstall to recover and resume backups."
+            "Automatic backup is active. Every time you open UltraDeep, a new folder 'UltraDeep - DD-MM-YY - HH.mm.ss' is created with zero overwrite! If you reinstall the app, select this same folder to automatically recover your data."
         } else {
-            "Choose a folder. Backups refresh when the app opens and goes to the background; select it again after reinstall."
+            "Choose a folder. Every time you open UltraDeep, a new timestamped folder is created with your complete data."
         }
     }
 

@@ -84,6 +84,20 @@ class MainActivity : AppCompatActivity() {
         observeMusicController()
         observeFavorites()
         checkAndRequestPermissions()
+
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val restored = BackupManager.performAppOpenBackup(this@MainActivity)
+            if (restored != null) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    scanLocalAudio()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Auto-recovered ${restored.lyricsCount} lyrics, ${restored.favoritesCount} favorites, ${restored.playlistsCount} playlists from backup!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun checkAndRequestPermissions() {
@@ -485,13 +499,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 optionsSheet.show(supportFragmentManager, com.ultradeep.music.ui.options.SongOptionsBottomSheet.TAG)
             }
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        UltraDeepApplication.instance.applicationScope.launch {
-            BackupManager.updateAutoBackup(this@MainActivity)
         }
     }
 
