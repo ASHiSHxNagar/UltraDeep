@@ -54,12 +54,13 @@ class DynamicAmbientView @JvmOverloads constructor(
     }
 
     // ── Fluid Simulation Paints ──────────────────────────────────────────────
-    // Additive screen blend mode makes overlapping fluid colors ignite into brilliant bloom
+    // Additive screen blend mode makes overlapping fluid colors ignite into brilliant bloom in dark mode.
+    // In light mode, normal SRC_OVER (null xfermode) ensures rich, vibrant colors blend smoothly without bleaching to white.
     private val screenBlend = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
 
     private val fluidPaints = Array(8) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            xfermode = screenBlend
+            xfermode = if (isLightTheme) null else screenBlend
         }
     }
 
@@ -68,13 +69,13 @@ class DynamicAmbientView @JvmOverloads constructor(
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
-            xfermode = screenBlend
+            xfermode = if (isLightTheme) null else screenBlend
         }
     }
     private val tendrilPaths = Array(6) { Path() }
 
     private val touchSplatPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        xfermode = screenBlend
+        xfermode = if (isLightTheme) null else screenBlend
     }
 
     private val gradientStops = floatArrayOf(0f, 0.25f, 0.65f, 1f)
@@ -300,18 +301,11 @@ class DynamicAmbientView @JvmOverloads constructor(
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
 
-        // One stable colour family at a time, with broad moving bodies and
-        // short-lived touch splats layered underneath the child content.
         drawFluidField(canvas, w, h)
         super.onDraw(canvas)
     }
 
-    @Suppress("UNUSED_CODE")
-    private fun drawLegacyFluidField(canvas: Canvas) {
-        val w = width.toFloat()
-        val h = height.toFloat()
-        if (w <= 0f || h <= 0f) return
-
+    private fun drawFluidField(canvas: Canvas, w: Float, h: Float) {
         // 1. Solid deep background base
         canvas.drawRect(0f, 0f, w, h, backgroundPaint)
 
@@ -335,19 +329,12 @@ class DynamicAmbientView @JvmOverloads constructor(
         val density = resources.displayMetrics.density
 
         // ── 2. Fluid Curling Smoke Tendrils ───────────────────────────────────
-        // Ribbon paths undulating along left, right, and diagonals
         val tendrilConfigs = arrayOf(
-            // 0: Left-side curling wisp
             Triple(0f, h * 0.90f, c[0]),
-            // 1: Right-side curling wisp
             Triple(w, h * 0.85f, c[2]),
-            // 2: Top-left plasma curl
             Triple(0f, h * 0.15f, c[4]),
-            // 3: Top-right plasma curl
             Triple(w, h * 0.20f, c[1]),
-            // 4: Bottom-center sweeping tendril
             Triple(w * 0.40f, h, c[6]),
-            // 5: Upper-center swirling ribbon
             Triple(w * 0.60f, 0f, c[3])
         )
 
@@ -365,7 +352,7 @@ class DynamicAmbientView @JvmOverloads constructor(
             val endY: Float
 
             when (i) {
-                0 -> { // Left edge smoke curling up and inward
+                0 -> {
                     p1x = w * (0.28f + 0.16f * sin(t * 1.6f + 0.2f))
                     p1y = h * (0.65f + 0.12f * cos(t * 1.3f))
                     p2x = w * (0.08f + 0.18f * cos(t * 1.8f + 1.2f))
@@ -373,7 +360,7 @@ class DynamicAmbientView @JvmOverloads constructor(
                     endX = w * (0.22f + 0.14f * sin(t * 1.2f + 2.5f))
                     endY = h * 0.10f
                 }
-                1 -> { // Right edge smoke curling up and inward
+                1 -> {
                     p1x = w * (0.72f - 0.16f * cos(t * 1.5f + 0.8f))
                     p1y = h * (0.60f + 0.14f * sin(t * 1.4f))
                     p2x = w * (0.92f - 0.18f * sin(t * 1.7f + 1.6f))
@@ -381,7 +368,7 @@ class DynamicAmbientView @JvmOverloads constructor(
                     endX = w * (0.78f - 0.14f * cos(t * 1.1f + 3.1f))
                     endY = h * 0.08f
                 }
-                2 -> { // Top-left curl across toward center
+                2 -> {
                     p1x = w * (0.25f + 0.15f * sin(t * 1.4f + 1.8f))
                     p1y = h * (0.18f + 0.10f * cos(t * 1.6f))
                     p2x = w * (0.45f + 0.12f * cos(t * 1.3f + 0.4f))
@@ -389,7 +376,7 @@ class DynamicAmbientView @JvmOverloads constructor(
                     endX = w * 0.65f
                     endY = h * 0.22f
                 }
-                3 -> { // Top-right curl across toward center
+                3 -> {
                     p1x = w * (0.75f - 0.15f * cos(t * 1.5f + 2.2f))
                     p1y = h * (0.20f + 0.10f * sin(t * 1.7f))
                     p2x = w * (0.55f - 0.12f * sin(t * 1.2f + 1.0f))
@@ -397,7 +384,7 @@ class DynamicAmbientView @JvmOverloads constructor(
                     endX = w * 0.35f
                     endY = h * 0.28f
                 }
-                4 -> { // Bottom center billowing upward
+                4 -> {
                     p1x = w * (0.35f + 0.20f * sin(t * 1.3f + 3.5f))
                     p1y = h * (0.80f - 0.10f * cos(t * 1.5f))
                     p2x = w * (0.65f - 0.20f * cos(t * 1.4f + 2.0f))
@@ -405,7 +392,7 @@ class DynamicAmbientView @JvmOverloads constructor(
                     endX = w * 0.50f
                     endY = h * 0.48f
                 }
-                else -> { // Center diagonal vortex ribbon
+                else -> {
                     p1x = w * (0.55f + 0.22f * cos(t * 1.2f + 4.2f))
                     p1y = h * (0.30f + 0.14f * sin(t * 1.5f))
                     p2x = w * (0.45f - 0.22f * sin(t * 1.4f + 1.5f))
@@ -419,12 +406,15 @@ class DynamicAmbientView @JvmOverloads constructor(
 
             val paint = tendrilPaints[i]
             paint.strokeWidth = strokeBase * (0.85f + 0.30f * sin(t * 1.2f + i.toFloat()))
+            val tendrilAlpha1 = if (isLightTheme) 0.38f else 0.65f
+            val tendrilAlpha2 = if (isLightTheme) 0.42f else 0.80f
+            val tendrilAlpha3 = if (isLightTheme) 0.18f else 0.40f
             paint.shader = LinearGradient(
                 startX, startY, endX, endY,
                 intArrayOf(
-                    colorWithAlpha(color, if (isLightTheme) 0.24f else 0.65f),
-                    colorWithAlpha(shiftHue(color, 45f), if (isLightTheme) 0.32f else 0.80f),
-                    colorWithAlpha(shiftHue(color, 90f), if (isLightTheme) 0.12f else 0.40f),
+                    colorWithAlpha(color, tendrilAlpha1),
+                    colorWithAlpha(shiftHue(color, 45f), tendrilAlpha2),
+                    colorWithAlpha(shiftHue(color, 90f), tendrilAlpha3),
                     Color.TRANSPARENT
                 ),
                 floatArrayOf(0f, 0.45f, 0.82f, 1f),
@@ -445,7 +435,6 @@ class DynamicAmbientView @JvmOverloads constructor(
         )
 
         val vortices = arrayOf(
-            // 0: Figure-eight high-velocity plasma stream
             Vortex(
                 cx = w * (0.50f + 0.50f * sin(t * 1.55f)),
                 cy = h * (0.50f + 0.48f * sin(t * 3.10f + 0.4f)),
@@ -453,9 +442,8 @@ class DynamicAmbientView @JvmOverloads constructor(
                 angle = (t * 45f) % 360f,
                 scaleX = 1.35f + 0.25f * sin(t * 1.8f),
                 scaleY = 0.75f + 0.20f * cos(t * 1.5f),
-                alpha = if (isLightTheme) 0.32f else 0.85f
+                alpha = if (isLightTheme) 0.46f else 0.85f
             ),
-            // 1: Top-right sweeping vortex with orbital curl
             Vortex(
                 cx = w * (0.52f + 0.52f * cos(t * 1.35f + 1.2f)),
                 cy = h * (0.48f + 0.52f * sin(t * 1.45f + 0.8f)),
@@ -463,9 +451,8 @@ class DynamicAmbientView @JvmOverloads constructor(
                 angle = (-t * 38f + 45f) % 360f,
                 scaleX = 1.25f + 0.20f * cos(t * 1.4f),
                 scaleY = 0.80f + 0.20f * sin(t * 1.6f),
-                alpha = if (isLightTheme) 0.30f else 0.80f
+                alpha = if (isLightTheme) 0.42f else 0.80f
             ),
-            // 2: Golden-ratio whirlpool
             Vortex(
                 cx = w * (0.50f + 0.48f * sin(t * 1.85f + 2.5f) * cos(t * 0.7f)),
                 cy = h * (0.50f + 0.48f * cos(t * 1.85f + 2.5f)),
@@ -473,9 +460,8 @@ class DynamicAmbientView @JvmOverloads constructor(
                 angle = (t * 52f + 120f) % 360f,
                 scaleX = 1.40f + 0.30f * sin(t * 2.1f),
                 scaleY = 0.70f + 0.15f * cos(t * 1.9f),
-                alpha = if (isLightTheme) 0.28f else 0.78f
+                alpha = if (isLightTheme) 0.40f else 0.78f
             ),
-            // 3: Bottom-left energetic surging jet
             Vortex(
                 cx = w * (0.48f + 0.52f * cos(t * 1.20f + 3.2f)),
                 cy = h * (0.52f + 0.52f * sin(t * 1.60f + 3.8f)),
@@ -483,9 +469,8 @@ class DynamicAmbientView @JvmOverloads constructor(
                 angle = (-t * 42f + 80f) % 360f,
                 scaleX = 1.30f + 0.25f * cos(t * 1.7f),
                 scaleY = 0.75f + 0.18f * sin(t * 1.3f),
-                alpha = if (isLightTheme) 0.30f else 0.82f
+                alpha = if (isLightTheme) 0.42f else 0.82f
             ),
-            // 4: Bottom-right fluid eddy
             Vortex(
                 cx = w * (0.50f + 0.52f * sin(t * 1.40f + 4.1f)),
                 cy = h * (0.50f + 0.52f * cos(t * 1.15f + 2.1f)),
@@ -493,9 +478,8 @@ class DynamicAmbientView @JvmOverloads constructor(
                 angle = (t * 36f + 200f) % 360f,
                 scaleX = 1.20f + 0.20f * sin(t * 1.5f),
                 scaleY = 0.82f + 0.20f * cos(t * 1.7f),
-                alpha = if (isLightTheme) 0.28f else 0.76f
+                alpha = if (isLightTheme) 0.38f else 0.76f
             ),
-            // 5: Rapid center harmonic pulse
             Vortex(
                 cx = w * (0.50f + 0.42f * sin(t * 2.40f + 0.6f)),
                 cy = h * (0.50f + 0.42f * cos(t * 2.10f + 1.1f)),
@@ -503,9 +487,8 @@ class DynamicAmbientView @JvmOverloads constructor(
                 angle = (-t * 60f) % 360f,
                 scaleX = 1.15f + 0.25f * cos(t * 2.2f),
                 scaleY = 0.85f + 0.15f * sin(t * 2.5f),
-                alpha = if (isLightTheme) 0.34f else 0.90f
+                alpha = if (isLightTheme) 0.48f else 0.90f
             ),
-            // 6: Perimeter sweep river
             Vortex(
                 cx = w * (0.50f + 0.55f * cos(t * 0.95f + 5.2f)),
                 cy = h * (0.50f + 0.55f * sin(t * 0.85f + 1.4f)),
@@ -513,9 +496,8 @@ class DynamicAmbientView @JvmOverloads constructor(
                 angle = (t * 28f + 310f) % 360f,
                 scaleX = 1.45f + 0.30f * sin(t * 1.1f),
                 scaleY = 0.65f + 0.18f * cos(t * 0.9f),
-                alpha = if (isLightTheme) 0.24f else 0.70f
+                alpha = if (isLightTheme) 0.36f else 0.70f
             ),
-            // 7: Counter-rotating plasma turbulence
             Vortex(
                 cx = w * (0.50f + 0.46f * sin(t * 2.80f + 1.8f)),
                 cy = h * (0.50f + 0.46f * sin(t * 1.90f + 4.2f)),
@@ -523,19 +505,24 @@ class DynamicAmbientView @JvmOverloads constructor(
                 angle = (-t * 48f + 150f) % 360f,
                 scaleX = 1.28f + 0.22f * cos(t * 1.8f),
                 scaleY = 0.78f + 0.18f * sin(t * 2.0f),
-                alpha = if (isLightTheme) 0.26f else 0.75f
+                alpha = if (isLightTheme) 0.38f else 0.75f
             )
         )
 
-        // Draw autonomous fluid vortices with additive glowing screen blend and elliptical rotation
+        // Draw autonomous fluid vortices with smooth blending and elliptical rotation
         vortices.forEachIndexed { i, vortex ->
             val color = c[i]
+            val centerColor = if (isLightTheme) color else Color.WHITE
+            val centerAlpha = if (isLightTheme) vortex.alpha * 0.65f else vortex.alpha * 0.42f
+            val bodyAlpha = if (isLightTheme) vortex.alpha * 0.52f else vortex.alpha * 0.95f
+            val edgeAlpha = if (isLightTheme) vortex.alpha * 0.20f else vortex.alpha * 0.30f
+
             fluidPaints[i].shader = RadialGradient(
                 0f, 0f, vortex.r,
                 intArrayOf(
-                    colorWithAlpha(Color.WHITE, vortex.alpha * (if (isLightTheme) 0.20f else 0.42f)),
-                    colorWithAlpha(color, vortex.alpha * 0.95f),
-                    colorWithAlpha(color, vortex.alpha * 0.30f),
+                    colorWithAlpha(centerColor, centerAlpha),
+                    colorWithAlpha(color, bodyAlpha),
+                    colorWithAlpha(color, edgeAlpha),
                     Color.TRANSPARENT
                 ),
                 gradientStops,
@@ -556,12 +543,13 @@ class DynamicAmbientView @JvmOverloads constructor(
             if (!splat.active || splat.alpha <= 0.01f) continue
 
             val splatR = splat.radius
+            val splatCenter = if (isLightTheme) splat.color else Color.WHITE
             touchSplatPaint.shader = RadialGradient(
                 splat.x, splat.y, splatR,
                 intArrayOf(
-                    colorWithAlpha(Color.WHITE, splat.alpha * (if (isLightTheme) 0.6f else 0.95f)),
-                    colorWithAlpha(splat.color, splat.alpha * (if (isLightTheme) 0.5f else 0.85f)),
-                    colorWithAlpha(splat.color, splat.alpha * (if (isLightTheme) 0.2f else 0.40f)),
+                    colorWithAlpha(splatCenter, splat.alpha * (if (isLightTheme) 0.70f else 0.95f)),
+                    colorWithAlpha(splat.color, splat.alpha * (if (isLightTheme) 0.55f else 0.85f)),
+                    colorWithAlpha(splat.color, splat.alpha * (if (isLightTheme) 0.22f else 0.40f)),
                     Color.TRANSPARENT
                 ),
                 gradientStops,
@@ -572,80 +560,6 @@ class DynamicAmbientView @JvmOverloads constructor(
 
         // ── 5. Frosted Dark Scrim ─────────────────────────────────────────────
         canvas.drawRect(0f, 0f, w, h, scrimPaint)
-
-        super.onDraw(canvas)
-    }
-
-    private fun drawFluidField(canvas: Canvas, w: Float, h: Float) {
-        canvas.drawRect(0f, 0f, w, h, backgroundPaint)
-
-        val t = animTime * 0.00155f
-        val colourBand = kotlin.math.floor(animTime / 2_400f).toInt()
-        val activeColor = shiftHue(baseColor1, (colourBand * 47f) % 360f)
-        val alpha = if (isLightTheme) 0.19f else 0.52f
-        val radius = (w.coerceAtLeast(h) * 0.54f).coerceAtLeast(420f)
-
-        // Slow, broad blobs make the whole screen feel like a liquid surface while
-        // staying in one colour family at any moment.
-        drawFluidBlob(canvas, w * (0.18f + 0.16f * sin(t * 0.72f)), h * (0.22f + 0.14f * cos(t * 0.58f)), radius, 1.25f, 0.72f, t * 18f, activeColor, alpha, 0)
-        drawFluidBlob(canvas, w * (0.82f + 0.18f * cos(t * 0.61f + 1.5f)), h * (0.36f + 0.20f * sin(t * 0.74f)), radius * 0.92f, 0.95f, 1.20f, -t * 15f, activeColor, alpha * 0.86f, 1)
-        drawFluidBlob(canvas, w * (0.44f + 0.28f * sin(t * 0.45f + 2.1f)), h * (0.82f + 0.16f * cos(t * 0.52f)), radius * 0.84f, 1.40f, 0.62f, t * 12f, activeColor, alpha * 0.72f, 2)
-        drawFluidBlob(canvas, w * (0.64f + 0.24f * cos(t * 0.38f + 3.8f)), h * (0.12f + 0.18f * sin(t * 0.63f)), radius * 0.72f, 0.80f, 1.30f, -t * 20f, activeColor, alpha * 0.64f, 3)
-
-        for (i in 0 until maxSplats) {
-            val splat = splats[i]
-            if (!splat.active || splat.alpha <= 0.01f) continue
-
-            touchSplatPaint.shader = RadialGradient(
-                splat.x,
-                splat.y,
-                splat.radius,
-                intArrayOf(
-                    colorWithAlpha(splat.color, splat.alpha * if (isLightTheme) 0.55f else 0.82f),
-                    colorWithAlpha(splat.color, splat.alpha * if (isLightTheme) 0.28f else 0.52f),
-                    Color.TRANSPARENT
-                ),
-                floatArrayOf(0f, 0.45f, 1f),
-                Shader.TileMode.CLAMP
-            )
-            canvas.drawCircle(splat.x, splat.y, splat.radius, touchSplatPaint)
-        }
-
-        canvas.drawRect(0f, 0f, w, h, scrimPaint)
-    }
-
-    private fun drawFluidBlob(
-        canvas: Canvas,
-        x: Float,
-        y: Float,
-        radius: Float,
-        scaleX: Float,
-        scaleY: Float,
-        angle: Float,
-        color: Int,
-        alpha: Float,
-        paintIndex: Int
-    ) {
-        val paint = fluidPaints[paintIndex]
-        paint.shader = RadialGradient(
-            0f,
-            0f,
-            radius,
-            intArrayOf(
-                colorWithAlpha(color, alpha),
-                colorWithAlpha(color, alpha * 0.68f),
-                colorWithAlpha(color, alpha * 0.24f),
-                Color.TRANSPARENT
-            ),
-            gradientStops,
-            Shader.TileMode.CLAMP
-        )
-        canvas.save()
-        canvas.translate(x, y)
-        canvas.rotate(angle)
-        canvas.scale(scaleX, scaleY)
-        canvas.drawCircle(0f, 0f, radius, paint)
-        canvas.restore()
     }
 
     // ── Color Utilities ──────────────────────────────────────────────────────
@@ -663,9 +577,9 @@ class DynamicAmbientView @JvmOverloads constructor(
         var newHue = (hsvBuffer[0] + degreeOffset) % 360f
         if (newHue < 0f) newHue += 360f
         hsvBuffer[0] = newHue
-        hsvBuffer[1] = if (isLightTheme) hsvBuffer[1].coerceIn(0.55f, 0.85f)
+        hsvBuffer[1] = if (isLightTheme) hsvBuffer[1].coerceIn(0.65f, 0.95f)
                        else              hsvBuffer[1].coerceAtLeast(0.85f)
-        hsvBuffer[2] = if (isLightTheme) hsvBuffer[2].coerceIn(0.60f, 0.90f)
+        hsvBuffer[2] = if (isLightTheme) hsvBuffer[2].coerceIn(0.70f, 0.95f)
                        else              hsvBuffer[2].coerceAtLeast(0.95f)
         return Color.HSVToColor(hsvBuffer)
     }

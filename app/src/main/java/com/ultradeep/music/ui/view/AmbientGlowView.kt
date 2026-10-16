@@ -59,9 +59,9 @@ class AmbientGlowView @JvmOverloads constructor(
     }
 
     fun setGlowColors(primaryColor: Int, secondaryColor: Int, animate: Boolean = true) {
-        // In light mode this is a soft colour wash around the art, not a dark neon halo.
-        targetCenterColor = adjustAlpha(primaryColor, if (isLightTheme) 0.22f else 0.65f)
-        targetMidColor = adjustAlpha(secondaryColor, if (isLightTheme) 0.12f else 0.35f)
+        // Ensure glowing ambient aura is vividly visible in both light and dark modes
+        targetCenterColor = adjustAlpha(primaryColor, if (isLightTheme) 0.65f else 0.70f)
+        targetMidColor = adjustAlpha(secondaryColor, if (isLightTheme) 0.38f else 0.40f)
 
         if (!animate) {
             currentCenterColor = targetCenterColor

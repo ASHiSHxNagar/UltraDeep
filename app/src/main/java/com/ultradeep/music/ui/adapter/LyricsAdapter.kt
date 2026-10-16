@@ -1,8 +1,10 @@
 package com.ultradeep.music.ui.adapter
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
+import androidx.core.content.ContextCompat
 import android.util.DisplayMetrics
 import android.view.LayoutInflater
 import android.view.View
@@ -201,15 +203,19 @@ class LyricsAdapter(
         }
 
         fun bind(line: LyricLine, isActive: Boolean, distanceToActive: Int, animate: Boolean) {
+            val ctx = itemView.context
+            val isDarkTheme = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            val primaryTextColor = if (isDarkTheme) Color.WHITE else ContextCompat.getColor(ctx, R.color.text_primary)
+
             tvLine.text = line.text
-            tvLine.typeface = getTypeface(itemView.context)
-            tvLine.setTextColor(Color.WHITE)
+            tvLine.typeface = getTypeface(ctx)
+            tvLine.setTextColor(primaryTextColor)
             tvLine.letterSpacing = -0.02f
             tvLine.pivotX = 0f
             tvLine.pivotY = tvLine.height.toFloat() / 2f
 
             if (isActive) {
-                // ── Spotify Active Line: Pure solid white, scale pop-in ─────────────
+                // ── Spotify Active Line: Solid text, scale pop-in ─────────────
                 if (animate && !wasActive) {
                     tvLine.animate().cancel()
                     tvLine.scaleX = 0.98f
@@ -228,11 +234,11 @@ class LyricsAdapter(
                     tvLine.alpha = 1.0f
                 }
             } else {
-                // ── Spotify Inactive Lines: Dimmed bold white with proximity fade ────
+                // ── Spotify Inactive Lines: Dimmed with proximity fade ────
                 val style = when (distanceToActive) {
-                    1    -> StyleConfig(alpha = 0.62f, scale = 0.98f)
-                    2    -> StyleConfig(alpha = 0.45f, scale = 0.94f)
-                    else -> StyleConfig(alpha = 0.28f, scale = 0.90f)
+                    1    -> StyleConfig(alpha = if (isDarkTheme) 0.62f else 0.65f, scale = 0.98f)
+                    2    -> StyleConfig(alpha = if (isDarkTheme) 0.45f else 0.46f, scale = 0.94f)
+                    else -> StyleConfig(alpha = if (isDarkTheme) 0.28f else 0.28f, scale = 0.90f)
                 }
 
                 if (animate && wasActive) {
