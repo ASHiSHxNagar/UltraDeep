@@ -19,14 +19,37 @@ jobs:
       - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
       - name: Build APKs with Gradle
-        run: ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
+        shell: bash
+        run: |
+          last_status=1
+
+          for attempt in 1 2 3; do
+            echo "Gradle build attempt ${attempt}/3"
+
+            if ./gradlew assembleDebug assembleRelease \
+              --no-daemon \
+              --stacktrace \
+              --refresh-dependencies; then
+              exit 0
+            fi
+
+            last_status=$?
+            echo "Gradle build failed; retrying after a delay..."
+            sleep $((attempt * 30))
+          done
+
+          exit "$last_status"
 
       - name: Upload UltraDeep Debug APK Artifact
         uses: actions/upload-artifact@v4
